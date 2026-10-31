@@ -1,0 +1,12 @@
+.venv/
+__pycache__/
+build/
+dist/
+*.spec
+.qa/
+.tools/
+vendor/
+installer/bin/
+installer/obj/
+release/
+*.user

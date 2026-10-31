@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <RuntimeFrameworkVersion>8.0.33</RuntimeFrameworkVersion>
+    <UseWindowsForms>true</UseWindowsForms>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>Silentanator-Setup</AssemblyName>
+    <RootNamespace>SilentanatorInstaller</RootNamespace>
+    <Version>1.0.0</Version>
+    <Company>Hola3Dprint</Company>
+    <Product>Silentanator Installer</Product>
+    <PublishSingleFile>true</PublishSingleFile>
+    <SelfContained>true</SelfContained>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <DebugType>none</DebugType>
+  </PropertyGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="$(PayloadFile)" LogicalName="Silentanator.Payload.zip" />
+    <EmbeddedResource Include="$(PayloadInfo)" LogicalName="Silentanator.Payload.json" />
+    <Compile Remove="Uninstall.cs" />
+  </ItemGroup>
+</Project>

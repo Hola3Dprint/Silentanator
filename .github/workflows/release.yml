@@ -1,0 +1,48 @@
+name: Build Windows installer
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  installer:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: '8.0.x'
+      - name: Build app and installer
+        shell: pwsh
+        run: ./scripts/build_installer.ps1
+      - name: Unit tests and hotkey regression
+        shell: pwsh
+        run: |
+          ./.venv/Scripts/python.exe -m unittest discover -s tests -v
+          if ($LASTEXITCODE -ne 0) { throw 'Tests failed' }
+          ./.venv/Scripts/python.exe -m tests.hotkey_loop_check
+          if ($LASTEXITCODE -ne 0) { throw 'Hotkey regression failed' }
+          ./scripts/test_installer.ps1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: Silentanator-Windows-Installer
+          path: |
+            release/Silentanator-Setup.exe
+            release/SHA256SUMS.txt
+      - name: Publish tagged release
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view $env:GITHUB_REF_NAME *> $null
+          if ($LASTEXITCODE -eq 0) {
+            gh release upload $env:GITHUB_REF_NAME release/Silentanator-Setup.exe release/SHA256SUMS.txt --clobber
+          } else {
+            gh release create $env:GITHUB_REF_NAME release/Silentanator-Setup.exe release/SHA256SUMS.txt --generate-notes --title "Silentanator $env:GITHUB_REF_NAME"
+          }
+          if ($LASTEXITCODE -ne 0) { throw 'Release publication failed' }
