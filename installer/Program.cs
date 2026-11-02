@@ -20,6 +20,7 @@ internal static class Program
     {
         try
         {
+            if (args.Contains("--apply-update")) return ApplyUpdate(args);
             if (args.Contains("--validate-payload"))
             {
                 var info = ValidatePayload();
@@ -49,6 +50,79 @@ internal static class Program
     {
         var index = Array.IndexOf(args, key);
         return index >= 0 && index + 1 < args.Length ? args[index + 1] : null;
+    }
+
+    static bool AppRunning(string directory, string executable)
+    {
+        string expected = Path.GetFullPath(Path.Combine(directory, executable));
+        foreach (var process in Process.GetProcessesByName(Path.GetFileNameWithoutExtension(executable)))
+        {
+            using (process)
+            {
+                try
+                {
+                    if (string.Equals(process.MainModule?.FileName, expected, StringComparison.OrdinalIgnoreCase)) return true;
+                }
+                catch (Exception) { /* An unrelated process may not be queryable. */ }
+            }
+        }
+        return false;
+    }
+
+    static int ApplyUpdate(string[] args)
+    {
+        string directory = Path.GetFullPath(Option(args, "--dir") ?? DefaultDirectory);
+        string? report = Option(args, "--update-report");
+        void Record(string state, string message)
+        {
+            if (report is null) return;
+            Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(report))!);
+            File.WriteAllText(report, JsonSerializer.Serialize(new { state, message, version = Version, utc = DateTime.UtcNow }));
+        }
+        void Restart()
+        {
+            foreach (var (flag, executable) in new[] { ("--restart-runner", "Silentanator.exe"), ("--restart-setup", "SilentanatorSetup.exe") })
+            {
+                string path = Path.Combine(directory, executable);
+                if (args.Contains(flag) && File.Exists(path) && !AppRunning(directory, executable))
+                    Process.Start(new ProcessStartInfo(path) { UseShellExecute = false, WorkingDirectory = directory, CreateNoWindow = true });
+            }
+        }
+        try
+        {
+            string marker = Path.Combine(directory, ".silentanator-install");
+            if (!File.Exists(marker) || File.ReadAllText(marker).Trim() != ProductId)
+                throw new InvalidOperationException("The update destination is not a Silentanator installation.");
+            ValidatePayload();
+            Record("waiting", "Waiting for the current request and open app windows to finish.");
+            var timer = Stopwatch.StartNew();
+            if (int.TryParse(Option(args, "--wait-pid"), out int parentId))
+            {
+                try
+                {
+                    using var parent = Process.GetProcessById(parentId);
+                    if (!parent.WaitForExit(360000)) throw new TimeoutException("The app did not finish within six minutes. The existing installation was not changed.");
+                }
+                catch (ArgumentException) { /* Caller already exited. */ }
+            }
+            while (AppRunning(directory, "Silentanator.exe") || AppRunning(directory, "SilentanatorSetup.exe"))
+            {
+                if (timer.Elapsed.TotalMinutes > 6)
+                    throw new TimeoutException("An app window is still open. The existing installation was not changed.");
+                Thread.Sleep(250);
+            }
+            Record("installing", "Installing verified update.");
+            Install(directory, !args.Contains("--no-shortcuts"), _ => { });
+            Record("installed", "Update installed successfully.");
+            Restart();
+            return 0;
+        }
+        catch (Exception exception)
+        {
+            Record("failed", exception.Message);
+            Restart();
+            throw;
+        }
     }
 
     static Stream Resource(string name) => Assembly.GetExecutingAssembly().GetManifestResourceStream("Silentanator." + name)

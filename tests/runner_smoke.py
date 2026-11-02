@@ -1,6 +1,7 @@
 """Exercise the native event loop without capturing or uploading the desktop."""
 import json
 from pathlib import Path
+import time
 from unittest.mock import patch
 from silentanator import runner
 from silentanator import core
@@ -18,11 +19,20 @@ with patch.object(runner, 'load_settings', return_value=settings), patch.object(
     def after_notice():
         try:
             assert app.root.state() == 'normal', 'Activity window must remain visible'
+            app.question_input.delete('1.0', 'end')
+            app.clear_attachments()
             for control in (app.capture_button, app.new_session_button, app.reference_entry,
                             app.solve_button, app.attach_button, app.batch_button, app.question_input):
                 assert control.winfo_ismapped(), 'Session controls must remain visible'
                 assert control.winfo_rooty() + control.winfo_height() <= app.root.winfo_rooty() + app.root.winfo_height(), 'Session controls must fit inside the window'
             assert not app.notice.winfo_exists(), 'Startup notice lasted more than a second'
+            with patch('silentanator.updater.latest_release', return_value=None):
+                app.updater.button.invoke()
+                deadline = time.monotonic() + 3
+                while app.updater.busy and time.monotonic() < deadline:
+                    app.root.update()
+                    time.sleep(.01)
+                assert 'Already up to date' in app.updater.label.cget('text')
             reference = qa / 'Pasted references'
             reference.mkdir(exist_ok=True)
             original_session = app.session.id
@@ -130,10 +140,21 @@ with patch.object(runner, 'load_settings', return_value=settings), patch.object(
             app.new_session()
             assert app.session.id != previous_session
             assert app.session.images == []
+            app.question_input.insert('1.0', 'Keep my unfinished question through an update.')
+            app.attached_images = [str(chart)]
+            app.busy = True
+            app.request_update()
+            assert app.update_pending and not app.cancel.is_set(), 'Updating must wait for an active solve rather than cancel it'
+            assert app.root.winfo_exists()
+            app.update_pending = False
+            app.busy = False
         finally:
             app.close()
     app.root.after(1100, after_notice)
     app.run()
     assert not errors, errors
     assert json.loads((qa / 'status.json').read_text())['state'] == 'stopped'
+    restored = core.StudySession(settings['output'])
+    assert restored.draft_question == 'Keep my unfinished question through an update.'
+    assert restored.draft_attachments == [str(qa / 'Test chart.png')]
     print('Silent mode stays hidden; dot remains visible in working/error states; activity toggle, Word launch, and shutdown passed.')

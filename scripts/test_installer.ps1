@@ -25,6 +25,11 @@ $taskPersonal = Join-Path $taskInstall 'my-kept-notes.txt'
 Set-Content -LiteralPath $taskPersonal -Value 'Keep this personal file.'
 Invoke-InstallTest
 if ((Get-Content -LiteralPath $taskPersonal -Raw).Trim() -ne 'Keep this personal file.') { throw 'Upgrade did not preserve extra files.' }
+$taskUpdateReport = Join-Path $taskQa 'apply-update-report.json'
+$taskUpdate = Start-Process -FilePath $taskInstaller -ArgumentList '--apply-update','--no-shortcuts','--dir',"`"$taskInstall`"",'--update-report',"`"$taskUpdateReport`"",'--log',"`"$taskLog`"" -WindowStyle Hidden -Wait -PassThru
+if ($taskUpdate.ExitCode -ne 0) { Get-Content -LiteralPath $taskLog; throw 'Update handoff installation failed.' }
+if ((Get-Content -LiteralPath $taskUpdateReport -Raw | ConvertFrom-Json).state -ne 'installed') { throw 'Update handoff did not report success.' }
+if ((Get-Content -LiteralPath $taskPersonal -Raw).Trim() -ne 'Keep this personal file.') { throw 'One-click update removed personal files.' }
 $taskResolved = (Resolve-Path -LiteralPath $taskInstall).Path
 if (-not $taskResolved.StartsWith($taskQa + [IO.Path]::DirectorySeparatorChar) -or
     (Get-Content -LiteralPath (Join-Path $taskResolved '.silentanator-install') -Raw).Trim() -ne 'f9334ef5-a351-4fba-a0a0-b563af7c6697') {

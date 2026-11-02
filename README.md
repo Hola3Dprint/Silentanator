@@ -18,7 +18,26 @@ Save and restart the runner to apply changed references; a new session starts if
 
 Close the runner with Ctrl+Alt+Q before installing an update. Uninstalling removes the app and its shortcuts while keeping your notes, local session screenshots, settings, and Codex sign-in. You can remove that separate personal data yourself if desired. The installer is not code signed, so Windows may display a publisher/reputation warning.
 
-## Start
+## One-click updates
+
+Click **Update from GitHub** in Setup or Live activity. It checks the latest stable release of
+`Hola3Dprint/Silentanator`, downloads the official installer, and verifies its size, published SHA-256
+checksum and GitHub asset digest before changing the installation. No GitHub sign-in is needed.
+If the current version is already the latest (or newer), it reports that without reinstalling.
+
+When an update is ready, open app windows close gracefully. An active solve finishes first; unsent
+question drafts, attachments, pending screenshot batches and unsaved Setup fields are preserved.
+The separate installer waits for the app to exit, applies the existing upgrade/rollback procedure,
+then restarts the runner or Setup as appropriate. Notes, saved settings, references and Codex sign-in
+are retained. Unsaved form edits are restored without being saved as configuration automatically.
+Download/verification errors leave the current app running. The last installation result is stored in
+`%LOCALAPPDATA%/Silentanator/updates/last-update.json`.
+
+Updates happen only when requested. Install v1.3.0 once to add the button; future versions can be
+installed through it. The installed runner also supports `Silentanator.exe --update`, which invokes
+the same update-button action. Source checkouts and unmanaged portable folders are not overwritten.
+
+## Run
 
 For a portable build, run `dist/SilentanatorSetup/SilentanatorSetup.exe`, check the connection, choose the Word output, and select **Save & run**. Keep the entire distribution folder together. The bundled official Codex CLI uses your ChatGPT sign-in; the app does not read tokens or automate the ChatGPT website. Requests consume the account's Codex allowance, not a separate API balance.
 

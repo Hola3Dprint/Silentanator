@@ -9,6 +9,12 @@ kernel = ctypes.WinDLL('kernel32', use_last_error=True)
 kernel.CreateMutexW.argtypes = [W.LPVOID, W.BOOL, W.LPCWSTR]
 kernel.CreateMutexW.restype = W.HANDLE
 kernel.CloseHandle.argtypes = [W.HANDLE]
+kernel.CreateEventW.argtypes = [W.LPVOID, W.BOOL, W.BOOL, W.LPCWSTR]
+kernel.CreateEventW.restype = W.HANDLE
+kernel.SetEvent.argtypes = [W.HANDLE]
+kernel.WaitForSingleObject.argtypes = [W.HANDLE, W.DWORD]
+kernel.OpenMutexW.argtypes = [W.DWORD, W.BOOL, W.LPCWSTR]
+kernel.OpenMutexW.restype = W.HANDLE
 user.RegisterHotKey.argtypes = [W.HWND, ctypes.c_int, W.UINT, W.UINT]
 user.UnregisterHotKey.argtypes = [W.HWND, ctypes.c_int]
 user.PeekMessageW.argtypes = [ctypes.POINTER(W.MSG), W.HWND, W.UINT, W.UINT, W.UINT]
@@ -102,8 +108,8 @@ class Hotkeys:
 
 
 class SingleInstance:
-    def __init__(self):
-        self.handle = kernel.CreateMutexW(None, False, 'Local\\SilentanatorRunner')
+    def __init__(self, name='Local\\SilentanatorRunner'):
+        self.handle = kernel.CreateMutexW(None, False, name)
         if not self.handle:
             raise ctypes.WinError(ctypes.get_last_error())
         if ctypes.get_last_error() == 183:
@@ -112,6 +118,33 @@ class SingleInstance:
 
     def close(self):
         kernel.CloseHandle(self.handle)
+
+
+def runner_running():
+    handle = kernel.OpenMutexW(0x00100000, False, 'Local\\SilentanatorRunner')
+    if not handle:
+        return False
+    kernel.CloseHandle(handle)
+    return True
+
+
+class UpdateRequest:
+    def __init__(self, name='Local\\SilentanatorUpdateStop'):
+        self.handle = kernel.CreateEventW(None, True, False, name)
+        if not self.handle:
+            raise ctypes.WinError(ctypes.get_last_error())
+
+    def is_set(self):
+        return bool(self.handle) and kernel.WaitForSingleObject(self.handle, 0) == 0
+
+    def signal(self):
+        if not kernel.SetEvent(self.handle):
+            raise ctypes.WinError(ctypes.get_last_error())
+
+    def close(self):
+        if self.handle:
+            kernel.CloseHandle(self.handle)
+            self.handle = None
 
 
 def enable_dpi():
@@ -175,7 +208,7 @@ def contain_children():
     kernel.GetCurrentProcess.restype = W.HANDLE
     handle = kernel.CreateJobObjectW(None, None)
     limits = LIMITS()
-    limits.basic.flags = 0x2000
+    limits.basic.flags = 0x2000 | 0x800  # Kill contained solvers; allow explicit updater breakaway.
     if not handle or not kernel.SetInformationJobObject(handle, 9, ctypes.byref(limits), ctypes.sizeof(limits)):
         raise ctypes.WinError(ctypes.get_last_error())
     if not kernel.AssignProcessToJobObject(handle, kernel.GetCurrentProcess()):

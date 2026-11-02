@@ -11,6 +11,7 @@ import time
 from .core import DATA, StudySession, clear_session_pending, load_settings, solve, append_notes, save_pending
 from .windows import Hotkeys, SingleInstance, capture_bounds, contain_children, enable_dpi, no_activate, show_corner_dot
 from .course_context import reference_folder, reference_file_paths
+from .updater import UpdateControl
 
 
 def record_status(state, detail=''):
@@ -45,6 +46,7 @@ class Runner:
         self.events = queue.Queue()
         self.cancel = threading.Event()
         self.busy = False
+        self.update_pending = False
         self.state = 'ready'
         self.silent = self.settings.get('silent', True)
         self.cues = self.settings['cues']
@@ -97,6 +99,8 @@ class Runner:
         frame = ttk.Frame(self.root, padding=18)
         frame.pack(fill='both', expand=True)
         ttk.Label(frame, text='Live activity', font=('Segoe UI', 20, 'bold')).pack(anchor='w')
+        self.updater = UpdateControl(self.root, frame, self.request_update)
+        self.updater.frame.pack(fill='x', pady=(0, 3))
         ttk.Label(frame, text=f"Capture: {self.settings['capture']}   •   Show/hide activity: {self.settings['toggle']}   •   Exit: {self.settings['quit']}\nSelect the problem window, then press the capture hotkey. The corner dot always stays on.", wraplength=760).pack(anchor='w', pady=(6, 10))
         self.stage = tk.StringVar(value='Ready')
         self.session_info = tk.StringVar(value=self.session_summary())
@@ -119,10 +123,12 @@ class Runner:
         self.question_input.pack(fill='x')
         if self.session.batch_question:
             self.question_input.insert('1.0', self.session.batch_question)
+        elif self.session.draft_question:
+            self.question_input.insert('1.0', self.session.draft_question)
         self.question_input.bind('<Control-Return>', self.submit_question)
         question_buttons = ttk.Frame(question_frame)
         question_buttons.pack(fill='x', pady=(5, 0))
-        self.attached_images = list(self.session.batch_attachments)
+        self.attached_images = list(self.session.batch_attachments if self.session.batch_target else self.session.draft_attachments)
         self.attach_button = ttk.Button(question_buttons, text='Attach images…', command=self.attach_images)
         self.attach_button.pack(side='left')
         self.clear_attachments_button = ttk.Button(question_buttons, text='Clear images', command=self.clear_attachments)
@@ -219,7 +225,7 @@ class Runner:
             self.attachment_info.set('0 images')
 
     def submit_question(self, event=None):
-        if self.busy:
+        if self.busy or self.update_pending:
             return 'break'
         if self.session.batch_target:
             self.activity('Finish or cancel the screenshot batch before submitting a typed question.')
@@ -244,6 +250,8 @@ class Runner:
         return 'break'
 
     def set_input_state(self, state):
+        if self.update_pending:
+            state = 'disabled'
         for control in (self.capture_button, self.new_session_button, self.reference_entry,
                         self.solve_button, self.question_input, self.attach_button,
                         self.clear_attachments_button, self.batch_button, self.batch_spin):
@@ -259,7 +267,7 @@ class Runner:
         return f'Batch: {len(self.session.batch_images)}/{self.session.batch_target} pictures captured. Select the next problem window and press {self.settings["capture"]}. Nothing sends until the batch is complete.'
 
     def start_batch(self, count, capture_now=True):
-        if self.busy:
+        if self.busy or self.update_pending:
             self.activity('Wait for the current request to finish.')
             return
         try:
@@ -293,7 +301,7 @@ class Runner:
         self.activity('Batch cancelled. Its pictures were not sent; earlier session notes remain.')
 
     def new_session(self):
-        if self.busy:
+        if self.busy or self.update_pending:
             self.activity('Wait for the current capture to finish before starting a new session.')
             return
         if self.session.batch_target:
@@ -366,7 +374,7 @@ class Runner:
         self.root.after(800, lambda: notice.destroy() if notice.winfo_exists() else None)
 
     def capture(self):
-        if self.busy:
+        if self.busy or self.update_pending:
             self.activity('A request is already running. Waiting for it to finish.')
             return
         if not self.apply_reference_folder():
@@ -391,7 +399,7 @@ class Runner:
         self.root.after(100, lambda: self.take_image(bounds))
 
     def delayed_capture(self):
-        if self.busy:
+        if self.busy or self.update_pending:
             return
         if not self.apply_reference_folder():
             return
@@ -542,9 +550,25 @@ class Runner:
         if time.monotonic() >= self.next_dot_refresh:
             self.paint()
             self.next_dot_refresh = time.monotonic() + 0.5
+        if self.update_pending and not self.busy:
+            self.close()
+            return
         self.root.after(35, self.tick)
 
+    def request_update(self):
+        self.update_pending = True
+        self.set_input_state('disabled')
+        self.activity('Update ready. Finishing the current request before restarting…' if self.busy
+                      else 'Saving the draft and restarting for the update…')
+
     def close(self):
+        if getattr(self, 'closed', False):
+            return
+        self.session.draft_question = self.question_input.get('1.0', 'end').strip()
+        self.session.draft_attachments = list(self.attached_images)
+        self.session.persist()
+        self.closed = True
+        self.updater.close()
         self.cancel.set()
         self.keys.close()
         self.instance.close()
@@ -556,9 +580,12 @@ class Runner:
         self.root.mainloop()
 
 
-def main():
+def main(update_now=False):
     try:
-        Runner().run()
+        app = Runner()
+        if update_now:
+            app.root.after(250, app.updater.button.invoke)
+        app.run()
     except Exception as exc:
         record_status('error', str(exc))
         messagebox.showerror('Silentanator', str(exc))

@@ -12,6 +12,7 @@ from tkinter import ttk, filedialog, messagebox
 from .core import DATA, find_codex, hidden_process, setup_settings, require_subscription, retry_pending, save_settings
 from .windows import SingleInstance, enable_dpi, parse_hotkey
 from .course_context import reference_folder, reference_file_paths
+from .updater import UpdateControl
 
 
 def runner_command():
@@ -24,6 +25,14 @@ class Setup:
     def __init__(self):
         enable_dpi()
         self.settings = setup_settings()
+        self.update_draft = DATA / 'setup-update-draft.json'
+        self.restored_form = {}
+        try:
+            saved_draft = json.loads(self.update_draft.read_text(encoding='utf-8'))
+            if isinstance(saved_draft, dict):
+                self.restored_form = saved_draft
+        except (OSError, ValueError):
+            pass
         self.root = tk.Tk()
         self.root.title('Silentanator Setup')
         self.root.geometry('740x700')
@@ -44,7 +53,11 @@ class Setup:
         frame.bind('<Configure>', lambda event: canvas.configure(scrollregion=canvas.bbox('all')))
         canvas.bind('<Configure>', lambda event: canvas.itemconfigure(embedded, width=event.width))
         frame.columnconfigure(1, weight=1)
-        ttk.Label(frame, text='Questions → study notes', font=('Segoe UI', 20, 'bold')).grid(row=0, column=0, columnspan=3, sticky='w')
+        header = ttk.Frame(frame)
+        header.grid(row=0, column=0, columnspan=3, sticky='ew')
+        ttk.Label(header, text='Questions → study notes', font=('Segoe UI', 20, 'bold')).pack(side='left')
+        self.updater = UpdateControl(self.root, header, self.request_update, restart_setup=True)
+        self.updater.frame.pack(side='right', padx=(8, 0))
         ttk.Label(frame, text='Capture on demand. Solve through your ChatGPT-signed-in Codex CLI.').grid(row=1, column=0, columnspan=3, sticky='w', pady=(4, 20))
         self.vars = {}
         fields = [('output', 'Word file (create or add to)'), ('codex', 'Codex executable (auto if blank)'),
@@ -52,7 +65,7 @@ class Setup:
                   ('toggle', 'Show/hide activity hotkey'), ('quit', 'Exit hotkey')]
         for row, (key, label) in enumerate(fields, 2):
             ttk.Label(frame, text=label).grid(row=row, column=0, sticky='w', padx=(0, 12), pady=7)
-            var = self.vars[key] = tk.StringVar(value=self.settings[key])
+            var = self.vars[key] = tk.StringVar(value=self.restored_form.get(key, self.settings[key]))
             ttk.Entry(frame, textvariable=var).grid(row=row, column=1, sticky='ew', pady=7)
             if key == 'output':
                 output_buttons = ttk.Frame(frame)
@@ -61,14 +74,14 @@ class Setup:
                 ttk.Button(output_buttons, text='New…', command=lambda: self.browse('output')).pack(side='left', padx=(4, 0))
             elif key == 'codex':
                 ttk.Button(frame, text='Browse', command=lambda k=key: self.browse(k)).grid(row=row, column=2, padx=(8, 0))
-        self.vars['scope'] = tk.StringVar(value=self.settings['scope'])
+        self.vars['scope'] = tk.StringVar(value=self.restored_form.get('scope', self.settings['scope']))
         ttk.Label(frame, text='Capture area').grid(row=8, column=0, sticky='w', pady=7)
         ttk.Combobox(frame, values=['active', 'primary'], state='readonly', textvariable=self.vars['scope']).grid(row=8, column=1, sticky='ew')
         ttk.Label(frame, text='active = foreground window; primary = main monitor').grid(row=9, column=1, columnspan=2, sticky='w')
         for row, key, label in [(10, 'silent', 'Start silent (keep activity window hidden)'),
                                 (11, 'cues', 'Show brief notifications when live activity is visible'),
                                 (12, 'batch_hotkeys', 'Enable Ctrl+2…9 screenshot batch hotkeys')]:
-            self.vars[key] = tk.BooleanVar(value=self.settings[key])
+            self.vars[key] = tk.BooleanVar(value=self.restored_form.get(key, self.settings[key]))
             ttk.Checkbutton(frame, text=label, variable=self.vars[key]).grid(row=row, column=0, columnspan=3, sticky='w', pady=7)
         ttk.Label(frame, text='The corner dot is always on: green ready, amber working, red error.\nShow Live activity to type a question, attach a diagram, or capture a batch.\nExisting Word notes are preserved; a backup is made before each update.\nScreenshots and typed questions are stored in your local session.', justify='left').grid(row=13, column=0, columnspan=3, sticky='w', pady=12)
         buttons = ttk.Frame(frame)
@@ -85,13 +98,13 @@ class Setup:
         course_frame.grid(row=16, column=0, columnspan=3, sticky='ew', pady=(8, 0))
         course_frame.columnconfigure(0, weight=1)
         ttk.Label(course_frame, text='Reference folder (includes subfolders)').grid(row=0, column=0, sticky='w')
-        self.vars['reference_folder'] = tk.StringVar(value=self.settings.get('reference_folder', ''))
+        self.vars['reference_folder'] = tk.StringVar(value=self.restored_form.get('reference_folder', self.settings.get('reference_folder', '')))
         ttk.Entry(course_frame, textvariable=self.vars['reference_folder']).grid(row=1, column=0, sticky='ew')
         ttk.Button(course_frame, text='Browse…', command=self.browse_reference_folder).grid(row=1, column=1, padx=(8, 0))
         ttk.Label(course_frame, text='Additional reference files (one full path per line)').grid(row=2, column=0, columnspan=2, sticky='w', pady=(6, 0))
         self.reference_files_input = tk.Text(course_frame, height=3, width=55, wrap='none', font=('Segoe UI', 10))
         self.reference_files_input.grid(row=3, column=0, columnspan=2, sticky='ew')
-        self.reference_files_input.insert('1.0', '\n'.join(self.settings.get('reference_files', [])))
+        self.reference_files_input.insert('1.0', '\n'.join(self.restored_form.get('reference_files', self.settings.get('reference_files', []))))
         file_buttons = ttk.Frame(course_frame)
         file_buttons.grid(row=4, column=0, columnspan=2, sticky='w', pady=(5, 0))
         ttk.Button(file_buttons, text='Add files…', command=self.add_reference_files).pack(side='left')
@@ -107,6 +120,9 @@ class Setup:
         self.root.geometry(f'{width}x{height}')
         self.root.minsize(min(width, 740), min(height, 650))
         self.root.after(100, self.poll)
+        self.root.protocol('WM_DELETE_WINDOW', self.close)
+        if self.restored_form:
+            self.update_draft.unlink(missing_ok=True)
 
     def browse(self, key):
         if key == 'output':
@@ -170,7 +186,22 @@ class Setup:
         if self.save():
             hidden_process(runner_command(), cwd=Path(__file__).resolve().parent.parent,
                            stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            self.root.destroy()
+            self.close()
+
+    def request_update(self):
+        # Keep incomplete form edits without validating or changing saved configuration.
+        draft = {key: value.get() for key, value in self.vars.items()}
+        draft['reference_files'] = self.reference_files_input.get('1.0', 'end').strip().splitlines()
+        DATA.mkdir(parents=True, exist_ok=True)
+        self.update_draft.write_text(json.dumps(draft, ensure_ascii=False), encoding='utf-8')
+        self.close()
+
+    def close(self):
+        if getattr(self, 'closed', False):
+            return
+        self.closed = True
+        self.updater.close()
+        self.root.destroy()
 
     def background(self, operation):
         self.status.set('Working…')

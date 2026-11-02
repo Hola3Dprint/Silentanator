@@ -18,6 +18,7 @@ with tempfile.TemporaryDirectory() as directory:
     original = output.read_bytes()
     settings = {**core.DEFAULTS, 'output': str(output)}
     with patch.object(setup, 'setup_settings', return_value=settings), \
+         patch.object(setup, 'DATA', root / 'app-data'), \
          patch.object(setup, 'find_codex', return_value='codex.exe'), \
          patch.object(setup, 'save_settings') as save:
         app = setup.Setup()
@@ -38,6 +39,14 @@ with tempfile.TemporaryDirectory() as directory:
             assert app.save()
             assert save.call_args.args[0]['reference_revision'] == revision, 'Unchanged references must not reset a session'
             assert output.read_bytes() == original, 'Selecting existing notes must not overwrite them'
+            app.vars['model'].set('my-unsaved-model-choice')
+            app.request_update()
+            restored = setup.Setup()
+            try:
+                assert restored.vars['model'].get() == 'my-unsaved-model-choice'
+                assert setup.reference_folder(restored.vars['reference_folder'].get()) == str(folder.resolve())
+            finally:
+                restored.close()
         finally:
-            app.root.destroy()
+            app.close()
 print('Setup references, existing Word selection, and unchanged-reference preservation passed.')

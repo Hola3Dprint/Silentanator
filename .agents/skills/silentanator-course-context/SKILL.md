@@ -56,3 +56,22 @@ the script requires a clean environment and exercises uninstall registration.
 Publish only when requested. Release `Silentanator-Setup.exe` together with `SHA256SUMS.txt` so the
 README's latest-download link continues to work. Verify the remote source/tag and uploaded asset
 size and digest, and account for the tag-triggered release workflow before replacing assets.
+
+## One-click updater validation
+
+The updater is explicit: stable releases only, a fixed public repository, exact asset URLs, bounded
+downloads, HTTPS GitHub-host redirects, and matching installer size/checksum/asset digest. Never
+use the user's GitHub credentials for the public update check. Failed verification must not signal
+app shutdown or execute a partial file.
+
+The runner's Windows job kills solver children on exit. The installer must launch with explicit
+breakaway flags, while solver processes remain contained. A named request event coordinates Setup
+and Runner shutdown; wait for an active solve, save drafts and pending batches, then let the separate
+installer replace files and restart. Setup draft restoration must not silently save incomplete edits
+as configuration. Use the installer `--apply-update` path for the upgrade handoff.
+
+Validate the same action used by the button (`Silentanator.exe --update`), including a real download,
+verification, caller exit, helper survival, installation report and a new runner PID. A controlled
+temporary older VERSION marker can exercise updating to the current release without publishing a
+dummy release; restore it on any failure. Verify saved settings, session ID, drafts and notes survive,
+then verify a second check reports up-to-date. Keep all QA state and reports local.

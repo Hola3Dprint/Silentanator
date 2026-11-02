@@ -451,6 +451,8 @@ class StudySession:
             self.reference_files = state.get('reference_files', [])
             self.reference_revision = state.get('reference_revision', '')
             self.questions = state.get('questions', [])
+            self.draft_question = state.get('draft_question', '')
+            self.draft_attachments = state.get('draft_attachments', [])
             self.batch_target = state.get('batch_target', 0)
             self.batch_question = state.get('batch_question', '')
             self.batch_attachments = state.get('batch_attachments', [])
@@ -468,6 +470,8 @@ class StudySession:
             self.reference_files = list(reference_files or [])
             self.reference_revision = reference_revision
             self.questions = []
+            self.draft_question = ''
+            self.draft_attachments = []
             self.batch_target = 0
             self.batch_question = ''
             self.batch_attachments = []
@@ -477,7 +481,7 @@ class StudySession:
 
     @staticmethod
     def write_json(path, value):
-        temporary = path.with_suffix('.tmp')
+        temporary = path.with_name(path.name + '.' + uuid.uuid4().hex + '.tmp')
         temporary.write_text(json.dumps(value, ensure_ascii=False), encoding='utf-8')
         temporary.replace(path)
 
@@ -487,6 +491,7 @@ class StudySession:
             'course': self.course,
             'reference_files': self.reference_files, 'reference_revision': self.reference_revision,
             'questions': self.questions,
+            'draft_question': self.draft_question, 'draft_attachments': self.draft_attachments,
             'batch_target': self.batch_target, 'batch_images': [p.name for p in self.batch_images],
             'batch_question': self.batch_question,
             'batch_attachments': self.batch_attachments,

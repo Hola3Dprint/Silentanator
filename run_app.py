@@ -11,4 +11,4 @@ if __name__ == '__main__':
         if '--report' in sys.argv:
             Path(sys.argv[sys.argv.index('--report') + 1]).write_text(json.dumps(value), encoding='utf-8')
     else:
-        main()
+        main(update_now='--update' in sys.argv)
