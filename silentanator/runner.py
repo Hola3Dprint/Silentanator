@@ -9,6 +9,7 @@ import os
 
 from .core import DATA, StudySession, clear_session_pending, load_settings, solve, append_notes, save_pending
 from .windows import Hotkeys, SingleInstance, capture_bounds, contain_children, enable_dpi, no_activate
+from .course_context import courses
 
 
 def record_status(state, detail=''):
@@ -78,6 +79,20 @@ class Runner:
         self.stage = tk.StringVar(value='Ready')
         self.session_info = tk.StringVar(value=f'Session: {len(self.session.images)} image(s)')
         ttk.Label(frame, textvariable=self.session_info).pack(anchor='w', pady=(0, 5))
+        course_row = ttk.Frame(frame)
+        course_row.pack(fill='x', pady=(0, 8))
+        ttk.Label(course_row, text='Course for this session:').pack(side='left', padx=(0, 8))
+        self.course_paths = {'Screenshot only': None}
+        self.course_paths.update({p.name: str(p.resolve()) for p in courses(self.settings['courses_root'])})
+        if self.session.course:
+            self.course_paths[Path(self.session.course).name] = self.session.course
+        self.course_choice = tk.StringVar(value=Path(self.session.course).name if self.session.course else 'Screenshot only')
+        self.course_picker = ttk.Combobox(course_row, state='readonly', textvariable=self.course_choice,
+                                         values=list(self.course_paths), width=48)
+        self.course_picker.pack(side='left', fill='x', expand=True)
+        self.course_picker.bind('<<ComboboxSelected>>', self.select_course)
+        ttk.Label(frame, text='Course excerpts used for solving are sent to OpenAI. Changing courses starts a new session.',
+                  wraplength=760).pack(anchor='w', pady=(0, 5))
         ttk.Label(frame, textvariable=self.stage, font=('Segoe UI', 11, 'bold'), wraplength=760).pack(anchor='w')
         self.progress = ttk.Progressbar(frame, mode='indeterminate')
         self.progress.pack(fill='x', pady=8)
@@ -90,14 +105,17 @@ class Runner:
         if self.session.answer:
             self.show_answer(self.session.answer)
         buttons = ttk.Frame(frame)
-        buttons.pack(fill='x', pady=(10, 0))
+        buttons.pack(side='bottom', fill='x', pady=(10, 0))
         ttk.Button(buttons, text='Open notes', command=self.open_notes).pack(side='left')
         self.capture_button = ttk.Button(buttons, text='Capture in 3 seconds', command=self.delayed_capture)
         self.capture_button.pack(side='left', padx=8)
         self.new_session_button = ttk.Button(buttons, text='New session', command=self.new_session)
         self.new_session_button.pack(side='left')
         ttk.Button(buttons, text='Stop and exit', command=self.close).pack(side='right')
-        ttk.Label(frame, text='Saving to: ' + self.settings['output'], wraplength=760).pack(anchor='w', pady=(8, 0))
+        ttk.Label(frame, text='Saving to: ' + self.settings['output'], wraplength=760).pack(side='bottom', anchor='w', pady=(8, 0))
+        # Reserve the controls and output label before giving the notes the remaining space.
+        panes.pack_forget()
+        panes.pack(fill='both', expand=True)
 
     def text_panel(self, panes, title, height):
         panel = ttk.LabelFrame(panes, text=title, padding=6)
@@ -129,13 +147,22 @@ class Runner:
         if self.busy:
             self.activity('Wait for the current capture to finish before starting a new session.')
             return
-        self.session = StudySession(self.settings['output'], fresh=True)
+        self.session = StudySession(self.settings['output'], fresh=True,
+                                    course=self.course_paths[self.course_choice.get()])
         self.session_info.set('Session: 0 images')
         self.answer_view.configure(state='normal')
         self.answer_view.delete('1.0', 'end')
         self.answer_view.configure(state='disabled')
         self.preview.configure(image='', text='The most recent screenshot will appear here.')
         self.activity('New session started. Earlier notes remain in the document.')
+
+    def select_course(self, event=None):
+        if self.busy:
+            self.course_choice.set(Path(self.session.course).name if self.session.course else 'Screenshot only')
+            return
+        if self.course_paths[self.course_choice.get()] != self.session.course:
+            self.new_session()
+            self.activity('Selected course: ' + self.course_choice.get())
 
     def open_notes(self):
         try:
@@ -189,6 +216,7 @@ class Runner:
         self.paint()
         self.capture_button.configure(state='disabled')
         self.new_session_button.configure(state='disabled')
+        self.course_picker.configure(state='disabled')
         self.root.after(100, lambda: self.take_image(bounds))
 
     def delayed_capture(self):
@@ -233,7 +261,8 @@ class Runner:
             self.events.put(('progress', f'Building on {len(self.session.images)} image(s) in this session…'))
             answer = solve(path, self.settings, self.cancel,
                            on_progress=lambda detail: self.events.put(('progress', detail)),
-                           history=self.session.images[:-1], previous_answer=self.session.answer)
+                           history=self.session.images[:-1], previous_answer=self.session.answer,
+                           course=self.session.course)
             self.session.remember(answer)
             self.events.put(('answer', answer))
             self.events.put(('progress', 'Saving a recovery copy of the solution…'))
@@ -275,6 +304,7 @@ class Runner:
             self.busy = False
             self.capture_button.configure(state='normal')
             self.new_session_button.configure(state='normal')
+            self.course_picker.configure(state='readonly')
             self.progress.stop()
             self.activity(('Error: ' if state == 'error' else '') + detail)
             record_status(self.state, detail)

@@ -36,6 +36,28 @@ Only a capture hotkey or the countdown button takes a screenshot. Choose the act
 
 ## Notes
 
+### Course context
+
+In Live activity (Ctrl+Alt+0), choose **Course for this session**. The course list comes from
+`Documents/StudyFlow`; change the parent folder in Setup under **Course references**.
+Each course is a direct child folder. Workspaces and generated output folders are excluded.
+Changing course starts a new session and preserves earlier notes. The selected course is restored
+after restarting. Choose **Screenshot only** to solve without course references.
+
+For a course solve, the app first identifies search terms from the problem image using Codex,
+then searches a local text index of that course's PDFs, DOCX, PPTX, Markdown, text and HTML files.
+It sends up to 18 relevant excerpts (about 36,000 characters) with the screenshots to Codex.
+The solution is instructed to follow course methods and notation and cite the filenames and
+PDF pages or slide numbers actually used. It labels a general method when the excerpts do not
+support a course-specific approach. This retrieval step adds a second Codex request per capture.
+
+The index lives in `%LOCALAPPDATA%/Silentanator/course-cache` and refreshes when source files
+change. Course files are never modified. Duplicate files are indexed once. Scanned/image-only
+pages, encrypted/corrupt files, and files over 60 MB may be unavailable; extraction warnings
+appear in activity. OCR is not included. Course images/diagrams are not extracted from PDFs.
+Selected excerpts are sent to OpenAI through your signed-in Codex account; the full course
+folder is not uploaded. Verify the cited method and answer against your original materials.
+
 The default file is `Documents/Notes.docx` with the visible title **Notes**. Captures in the same session share all prior images and the latest notes. The solver returns complete updated session notes: it continues related problems, corrects earlier assumptions when more information appears, and adds sections for new problems. That session's Word content control is replaced in place, preserving earlier sessions and other document content. Equations remain native editable Word equations (OMML), converted from LaTeX.
 
 The current session's image history and latest answer are saved locally and restored after a restart. **New session** clears the solver's context for subsequent captures and starts a new section in the same file; earlier notes and saved sessions remain. It does not delete session images. Notes created before session support remain in the document; their original screenshots are not available as context. Longer sessions resend more images and use more of the Codex allowance.

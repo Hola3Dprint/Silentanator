@@ -4,3 +4,4 @@ latex2mathml>=3.78,<4
 mathml2omml>=0.0.2,<1
 pyinstaller>=6,<7
 pywin32>=308,<400
+pypdf>=6.21.4,<7

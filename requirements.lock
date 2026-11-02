@@ -9,6 +9,7 @@ pyinstaller==6.22.3
 pyinstaller-hooks-contrib==2026.9
 python-docx==1.2.0
 pywin32==312
+pypdf==6.21.4
 pywin32-ctypes==0.2.3
 setuptools==84.2.1
 typing_extensions==4.16.0
