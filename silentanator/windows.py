@@ -19,10 +19,21 @@ user.RegisterHotKey.argtypes = [W.HWND, ctypes.c_int, W.UINT, W.UINT]
 user.UnregisterHotKey.argtypes = [W.HWND, ctypes.c_int]
 user.PeekMessageW.argtypes = [ctypes.POINTER(W.MSG), W.HWND, W.UINT, W.UINT, W.UINT]
 user.GetForegroundWindow.restype = W.HWND
+user.GetParent.argtypes = [W.HWND]
+user.GetParent.restype = W.HWND
+user.IsWindow.argtypes = [W.HWND]
+user.SetForegroundWindow.argtypes = [W.HWND]
 user.ShowWindow.argtypes = [W.HWND, ctypes.c_int]
 user.IsWindowVisible.argtypes = [W.HWND]
 user.SetWindowPos.argtypes = [W.HWND, W.HWND, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, W.UINT]
 user.GetWindowRect.argtypes = [W.HWND, ctypes.POINTER(W.RECT)]
+
+
+def restore_foreground(window):
+    """Return from the question popup to the window that was being studied."""
+    if window and user.IsWindow(window):
+        return bool(user.SetForegroundWindow(window))
+    return False
 
 
 def parse_hotkey(text):

@@ -16,7 +16,7 @@ CONFIG = DATA / 'settings.json'
 DEFAULTS = {
     'output': str(Path.home() / 'Documents' / 'Notes.docx'),
     'codex': '', 'model': '', 'capture': 'Ctrl+0',
-    'toggle': 'Ctrl+Alt+0', 'quit': 'Ctrl+Alt+Q',
+    'toggle': 'Ctrl+Alt+0', 'quit': 'Ctrl+Alt+Q', 'text': 'Ctrl+Alt+T',
     'cues': False, 'dot': True, 'silent': True, 'scope': 'active',
     'reference_folder': '', 'reference_files': [], 'reference_revision': '',
     'batch_hotkeys': True,

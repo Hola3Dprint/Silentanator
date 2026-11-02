@@ -62,7 +62,8 @@ class Setup:
         self.vars = {}
         fields = [('output', 'Word file (create or add to)'), ('codex', 'Codex executable (auto if blank)'),
                   ('model', 'Model (Codex default if blank)'), ('capture', 'Capture hotkey'),
-                  ('toggle', 'Show/hide activity hotkey'), ('quit', 'Exit hotkey')]
+                  ('toggle', 'Show/hide activity hotkey'), ('quit', 'Exit hotkey'),
+                  ('text', 'Show/hide text box hotkey')]
         for row, (key, label) in enumerate(fields, 2):
             ttk.Label(frame, text=label).grid(row=row, column=0, sticky='w', padx=(0, 12), pady=7)
             var = self.vars[key] = tk.StringVar(value=self.restored_form.get(key, self.settings[key]))
@@ -75,27 +76,27 @@ class Setup:
             elif key == 'codex':
                 ttk.Button(frame, text='Browse', command=lambda k=key: self.browse(k)).grid(row=row, column=2, padx=(8, 0))
         self.vars['scope'] = tk.StringVar(value=self.restored_form.get('scope', self.settings['scope']))
-        ttk.Label(frame, text='Capture area').grid(row=8, column=0, sticky='w', pady=7)
-        ttk.Combobox(frame, values=['active', 'primary'], state='readonly', textvariable=self.vars['scope']).grid(row=8, column=1, sticky='ew')
-        ttk.Label(frame, text='active = foreground window; primary = main monitor').grid(row=9, column=1, columnspan=2, sticky='w')
-        for row, key, label in [(10, 'silent', 'Start silent (keep activity window hidden)'),
-                                (11, 'cues', 'Show brief notifications when live activity is visible'),
-                                (12, 'batch_hotkeys', 'Enable Ctrl+2…9 screenshot batch hotkeys')]:
+        ttk.Label(frame, text='Capture area').grid(row=9, column=0, sticky='w', pady=7)
+        ttk.Combobox(frame, values=['active', 'primary'], state='readonly', textvariable=self.vars['scope']).grid(row=9, column=1, sticky='ew')
+        ttk.Label(frame, text='active = foreground window; primary = main monitor').grid(row=10, column=1, columnspan=2, sticky='w')
+        for row, key, label in [(11, 'silent', 'Start silent (keep activity window hidden)'),
+                                (12, 'cues', 'Show brief notifications when live activity is visible'),
+                                (13, 'batch_hotkeys', 'Enable Ctrl+2…9 screenshot batch hotkeys')]:
             self.vars[key] = tk.BooleanVar(value=self.restored_form.get(key, self.settings[key]))
             ttk.Checkbutton(frame, text=label, variable=self.vars[key]).grid(row=row, column=0, columnspan=3, sticky='w', pady=7)
-        ttk.Label(frame, text='The corner dot is always on: green ready, amber working, red error.\nShow Live activity to type a question, attach a diagram, or capture a batch.\nExisting Word notes are preserved; a backup is made before each update.\nScreenshots and typed questions are stored in your local session.', justify='left').grid(row=13, column=0, columnspan=3, sticky='w', pady=12)
+        ttk.Label(frame, text='The corner dot is always on: green ready, amber working, red error.\nThe text-box hotkey opens just your question; capture includes that text.\nCtrl+2…9 chooses a count; then use the capture hotkey for every picture.\nExisting Word notes are preserved; a backup is made before each update.\nScreenshots and typed questions are stored in your local session.', justify='left').grid(row=14, column=0, columnspan=3, sticky='w', pady=12)
         buttons = ttk.Frame(frame)
-        buttons.grid(row=14, column=0, columnspan=3, sticky='ew', pady=8)
+        buttons.grid(row=15, column=0, columnspan=3, sticky='ew', pady=8)
         for label, command in [('Check connection', self.check), ('Retry saved notes', self.retry),
                                ('Save', self.save), ('Save & run', self.start)]:
             ttk.Button(buttons, text=label, command=command).pack(side='left', padx=(0, 8))
         links = ttk.Frame(frame)
-        links.grid(row=15, column=0, columnspan=3, sticky='w')
+        links.grid(row=16, column=0, columnspan=3, sticky='w')
         ttk.Button(links, text='Sign in to Codex', command=self.sign_in).pack(side='left', padx=(0, 8))
         ttk.Button(links, text='Open notes folder', command=self.open_folder).pack(side='left')
         ttk.Button(links, text='Show last status', command=self.show_status).pack(side='left', padx=8)
         course_frame = ttk.LabelFrame(frame, text='Reference documents (optional)', padding=8)
-        course_frame.grid(row=16, column=0, columnspan=3, sticky='ew', pady=(8, 0))
+        course_frame.grid(row=17, column=0, columnspan=3, sticky='ew', pady=(8, 0))
         course_frame.columnconfigure(0, weight=1)
         ttk.Label(course_frame, text='Reference folder (includes subfolders)').grid(row=0, column=0, sticky='w')
         self.vars['reference_folder'] = tk.StringVar(value=self.restored_form.get('reference_folder', self.settings.get('reference_folder', '')))
@@ -112,7 +113,7 @@ class Setup:
         ttk.Label(course_frame, text='Folder and files can be used together. Save and restart the runner to apply.\nSelected excerpts are sent to OpenAI; original reference files stay unchanged.',
                   wraplength=640).grid(row=5, column=0, columnspan=2, sticky='w', pady=(5, 0))
         self.status = tk.StringVar(value='Ready to configure. Use the exit hotkey or Task Manager to stop the runner.')
-        ttk.Label(frame, textvariable=self.status, wraplength=665, foreground='#395575').grid(row=17, column=0, columnspan=3, sticky='w', pady=(16, 0))
+        ttk.Label(frame, textvariable=self.status, wraplength=665, foreground='#395575').grid(row=18, column=0, columnspan=3, sticky='w', pady=(16, 0))
         self.events = queue.Queue()
         self.root.update_idletasks()
         width = max(740, frame.winfo_reqwidth() + 12)
@@ -160,9 +161,9 @@ class Setup:
         changed = (values['reference_folder'] != self.settings.get('reference_folder', '') or
                    values['reference_files'] != self.settings.get('reference_files', []))
         values['reference_revision'] = uuid.uuid4().hex if changed else self.settings.get('reference_revision', '')
-        parsed = [parse_hotkey(values[k]) for k in ('capture', 'toggle', 'quit')]
-        if len(set(parsed)) != 3:
-            raise ValueError('Choose three distinct hotkeys.')
+        parsed = [parse_hotkey(values[k]) for k in ('capture', 'toggle', 'quit', 'text')]
+        if len(set(parsed)) != 4:
+            raise ValueError('Choose four distinct hotkeys.')
         if values['batch_hotkeys']:
             ctrl_mods = parse_hotkey('Ctrl+2')[0]
             if any(mods == ctrl_mods and (ord('2') <= code <= ord('9') or 0x62 <= code <= 0x69)

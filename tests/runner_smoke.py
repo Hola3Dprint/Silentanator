@@ -10,7 +10,8 @@ from silentanator.core import DEFAULTS
 qa = Path('.qa').resolve()
 qa.mkdir(exist_ok=True)
 settings = {**DEFAULTS, 'output': str(qa / 'Notes.docx'), 'batch_hotkeys': False,
-            'silent': False, 'cues': True, 'capture': 'Ctrl+Alt+F21', 'toggle': 'Ctrl+Alt+F22', 'quit': 'Ctrl+Alt+F23'}
+            'silent': False, 'cues': True, 'capture': 'Ctrl+Alt+F21', 'toggle': 'Ctrl+Alt+F22',
+            'quit': 'Ctrl+Alt+F23', 'text': 'Ctrl+Alt+F24'}
 with patch.object(runner, 'load_settings', return_value=settings), patch.object(runner, 'DATA', qa), \
      patch.object(core, 'DATA', qa), patch.object(runner, 'SingleInstance'):
     app = runner.Runner()
@@ -72,12 +73,19 @@ with patch.object(runner, 'load_settings', return_value=settings), patch.object(
             app.set_input_state('normal')
             app.clear_attachments()
             app.question_input.delete('1.0', 'end')
-            app.batch_key_counts[4] = 2
+            app.batch_key_counts[5] = 2
             with patch.object(app, 'capture') as capture:
-                app.keys.messages.put(4)
+                app.keys.messages.put(5)
+                app.tick()
+                capture.assert_not_called()
+                assert app.session.batch_target == 2, 'Count hotkey must start a two-image batch'
+                assert not app.session.batch_images, 'Choosing a count must not take the first picture'
+                app.keys.messages.put(5)
+                app.tick()
+                capture.assert_not_called()
+                app.keys.messages.put(1)
                 app.tick()
                 capture.assert_called_once()
-                assert app.session.batch_target == 2, 'Count hotkey must start a two-image batch'
             with patch.object(runner, 'solve') as solve:
                 app.work(Image.new('RGB', (20, 20)))
                 app.tick()
@@ -89,6 +97,38 @@ with patch.object(runner, 'load_settings', return_value=settings), patch.object(
                 assert not app.session.images, 'Cancelled batch must not enter session image history'
             app.set_silent(True)
             assert app.root.state() == 'withdrawn'
+            app.keys.messages.put(4)
+            app.tick()
+            app.root.update()
+            assert app.composer.state() == 'normal', 'Text hotkey must show the compact popup'
+            assert app.root.state() == 'withdrawn', 'Text hotkey must not show the activity window'
+            assert app.composer.winfo_children() == [app.composer_input], 'The compact popup contains only a text box'
+            app.composer_input.insert('1.0', 'Use the next screenshot with this typed question.')
+            app.root.update()
+            assert app.question_input.get('1.0', 'end').strip() == 'Use the next screenshot with this typed question.'
+            app.hide_question_box()
+            app.question_input.insert('end-1c', ' Show every step.')
+            app.root.update()
+            assert app.composer_input.get('1.0', 'end').strip().endswith('Show every step.')
+            app.attached_images = [str(chart)]
+            app.settings['scope'] = 'primary'
+            with patch.object(app, 'take_image') as take_image, patch.object(runner, 'capture_bounds', return_value=None):
+                app.keys.messages.put(1)
+                app.tick()
+                deadline = time.monotonic() + 2
+                while not take_image.called and time.monotonic() < deadline:
+                    app.root.update()
+                    time.sleep(.01)
+                take_image.assert_called_once_with(None, 'Use the next screenshot with this typed question. Show every step.', [str(chart)])
+            app.settings['scope'] = 'active'
+            app.events.put(('input_sent', None))
+            app.events.put(('ready', 'Saved test input'))
+            with patch.object(app, 'open_notes'):
+                app.tick()
+            app.root.update()
+            assert not app.question_input.get('1.0', 'end').strip()
+            assert not app.composer_input.get('1.0', 'end').strip(), 'Successful capture clears both synced drafts'
+            assert not app.attached_images
             assert app.dot.state() == 'normal'
             app.dot.withdraw()
             app.next_dot_refresh = 0

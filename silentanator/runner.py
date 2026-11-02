@@ -9,7 +9,7 @@ import os
 import time
 
 from .core import DATA, StudySession, clear_session_pending, load_settings, solve, append_notes, save_pending
-from .windows import Hotkeys, SingleInstance, capture_bounds, contain_children, enable_dpi, no_activate, show_corner_dot
+from .windows import Hotkeys, SingleInstance, capture_bounds, contain_children, enable_dpi, no_activate, show_corner_dot, restore_foreground
 from .course_context import reference_folder, reference_file_paths
 from .updater import UpdateControl
 
@@ -47,10 +47,14 @@ class Runner:
         self.cancel = threading.Event()
         self.busy = False
         self.update_pending = False
+        self.composer = None
+        self.composer_input = None
+        self.composer_origin = None
+        self.syncing_question = False
         self.state = 'ready'
         self.silent = self.settings.get('silent', True)
         self.cues = self.settings['cues']
-        hotkeys = [self.settings[k] for k in ('capture', 'toggle', 'quit')]
+        hotkeys = [self.settings[k] for k in ('capture', 'toggle', 'quit', 'text')]
         self.batch_key_counts = {}
         if self.settings.get('batch_hotkeys', True):
             for count in range(2, 10):
@@ -101,7 +105,7 @@ class Runner:
         ttk.Label(frame, text='Live activity', font=('Segoe UI', 20, 'bold')).pack(anchor='w')
         self.updater = UpdateControl(self.root, frame, self.request_update)
         self.updater.frame.pack(fill='x', pady=(0, 3))
-        ttk.Label(frame, text=f"Capture: {self.settings['capture']}   •   Show/hide activity: {self.settings['toggle']}   •   Exit: {self.settings['quit']}\nSelect the problem window, then press the capture hotkey. The corner dot always stays on.", wraplength=760).pack(anchor='w', pady=(6, 10))
+        ttk.Label(frame, text=f"Capture: {self.settings['capture']}   •   Activity: {self.settings['toggle']}   •   Text box: {self.settings['text']}   •   Exit: {self.settings['quit']}\nType a question, then capture its picture. The corner dot always stays on.", wraplength=760).pack(anchor='w', pady=(6, 10))
         self.stage = tk.StringVar(value='Ready')
         self.session_info = tk.StringVar(value=self.session_summary())
         ttk.Label(frame, textvariable=self.session_info).pack(anchor='w', pady=(0, 5))
@@ -126,6 +130,8 @@ class Runner:
         elif self.session.draft_question:
             self.question_input.insert('1.0', self.session.draft_question)
         self.question_input.bind('<Control-Return>', self.submit_question)
+        self.question_input.edit_modified(False)
+        self.question_input.bind('<<Modified>>', self.sync_question)
         question_buttons = ttk.Frame(question_frame)
         question_buttons.pack(fill='x', pady=(5, 0))
         self.attached_images = list(self.session.batch_attachments if self.session.batch_target else self.session.draft_attachments)
@@ -143,11 +149,11 @@ class Runner:
         self.batch_count = tk.IntVar(value=2)
         self.batch_spin = ttk.Spinbox(batch_row, from_=2, to=99, width=4, textvariable=self.batch_count)
         self.batch_spin.pack(side='left', padx=5)
-        self.batch_button = ttk.Button(batch_row, text='Start batch', command=lambda: self.start_batch(self.batch_spin.get(), False))
+        self.batch_button = ttk.Button(batch_row, text='Start batch', command=lambda: self.start_batch(self.batch_spin.get()))
         self.batch_button.pack(side='left')
         self.cancel_batch_button = ttk.Button(batch_row, text='Cancel batch', command=self.cancel_batch)
         self.cancel_batch_button.pack(side='left', padx=5)
-        batch_help = (f'Ctrl+2…9: start that many pictures. {self.settings["capture"]}: capture remaining pictures.'
+        batch_help = (f'Ctrl+2…9: choose picture count. Then press {self.settings["capture"]} once per picture.'
                       if self.settings.get('batch_hotkeys', True) else
                       f'Count hotkeys are off. Use Start batch, then capture with {self.settings["capture"]}.')
         ttk.Label(frame, text=batch_help + ' Typed text and attached images join the batch.',
@@ -249,6 +255,67 @@ class Runner:
         threading.Thread(target=self.work, args=(None, question, list(self.attached_images)), daemon=True).start()
         return 'break'
 
+    def sync_question(self, event):
+        source = event.widget
+        if not source.edit_modified():
+            return
+        source.edit_modified(False)
+        if self.syncing_question:
+            return
+        target = self.composer_input if source is self.question_input else self.question_input
+        if target is None:
+            return
+        value = source.get('1.0', 'end-1c')
+        if target.get('1.0', 'end-1c') == value:
+            return
+        self.syncing_question = True
+        try:
+            state = target.cget('state')
+            target.configure(state='normal')
+            target.delete('1.0', 'end')
+            target.insert('1.0', value)
+            target.edit_modified(False)
+            target.configure(state=state)
+        finally:
+            self.syncing_question = False
+
+    def toggle_question_box(self):
+        if self.busy or self.update_pending:
+            return
+        if self.composer and self.composer.state() != 'withdrawn':
+            self.hide_question_box()
+            return
+        from .windows import user
+        foreground = user.GetForegroundWindow()
+        self.composer_origin = foreground if foreground != user.GetParent(self.root.winfo_id()) else None
+        if self.composer is None:
+            self.composer = tk.Toplevel(self.root)
+            self.composer.withdraw()
+            self.composer.title(f'Question — {self.settings["capture"]} adds screenshot · Esc hides')
+            self.composer.geometry('620x180')
+            self.composer.minsize(320, 100)
+            self.composer_input = tk.Text(self.composer, wrap='word', undo=True, font=('Segoe UI', 12), padx=10, pady=10)
+            self.composer_input.pack(fill='both', expand=True)
+            self.composer_input.insert('1.0', self.question_input.get('1.0', 'end-1c'))
+            self.composer_input.edit_modified(False)
+            self.composer_input.bind('<<Modified>>', self.sync_question)
+            self.composer_input.bind('<Escape>', self.hide_question_box)
+            self.composer_input.bind('<Control-Return>', self.submit_question)
+            self.composer.protocol('WM_DELETE_WINDOW', self.hide_question_box)
+        self.composer_input.configure(state='disabled' if self.session.batch_target else 'normal')
+        self.composer.deiconify()
+        self.composer.lift()
+        self.composer_input.focus_force()
+
+    def hide_question_box(self, event=None):
+        if self.composer:
+            from .windows import user
+            was_foreground = user.GetForegroundWindow() == user.GetParent(self.composer.winfo_id())
+            self.composer.withdraw()
+            if was_foreground:
+                restore_foreground(self.composer_origin)
+        return 'break'
+
     def set_input_state(self, state):
         if self.update_pending:
             state = 'disabled'
@@ -262,11 +329,13 @@ class Runner:
                             self.batch_button, self.batch_spin):
                 control.configure(state='disabled')
         self.cancel_batch_button.configure(state='normal' if state == 'normal' and self.session.batch_target else 'disabled')
+        if self.composer_input is not None:
+            self.composer_input.configure(state='normal' if state == 'normal' and not self.session.batch_target else 'disabled')
 
     def batch_message(self):
         return f'Batch: {len(self.session.batch_images)}/{self.session.batch_target} pictures captured. Select the next problem window and press {self.settings["capture"]}. Nothing sends until the batch is complete.'
 
-    def start_batch(self, count, capture_now=True):
+    def start_batch(self, count):
         if self.busy or self.update_pending:
             self.activity('Wait for the current request to finish.')
             return
@@ -274,7 +343,7 @@ class Runner:
             count = int(count)
             if self.session.batch_target:
                 if count == self.session.batch_target:
-                    self.capture()
+                    self.activity(self.batch_message())
                 else:
                     self.activity('Finish or cancel the current batch before changing its count.')
                 return
@@ -287,8 +356,6 @@ class Runner:
             self.session_info.set(self.session_summary())
             self.set_input_state('normal')
             self.activity(self.batch_message())
-            if capture_now:
-                self.capture()
         except (ValueError, tk.TclError) as exc:
             self.activity(str(exc))
 
@@ -377,7 +444,17 @@ class Runner:
         if self.busy or self.update_pending:
             self.activity('A request is already running. Waiting for it to finish.')
             return
+        if self.composer and self.composer.state() != 'withdrawn':
+            self.hide_question_box()
+            self.root.after(100, self.capture)
+            return
         if not self.apply_reference_folder():
+            return
+        # Snapshot Tk inputs on the GUI thread, never from the solver thread.
+        question = None if self.session.batch_target else self.question_input.get('1.0', 'end').strip()
+        attachments = None if self.session.batch_target else list(self.attached_images)
+        if question and len(question) > 30000:
+            self.activity('Keep a typed question under 30,000 characters; use reference files for longer material.')
             return
         # Acquire foreground bounds before hiding our non-activating overlays.
         bounds = capture_bounds(self.settings['scope'])
@@ -396,7 +473,7 @@ class Runner:
         self.state = 'working'
         self.paint()
         self.set_input_state('disabled')
-        self.root.after(100, lambda: self.take_image(bounds))
+        self.root.after(100, lambda: self.take_image(bounds, question, attachments))
 
     def delayed_capture(self):
         if self.busy or self.update_pending:
@@ -416,7 +493,7 @@ class Runner:
                 self.events.put(('error', str(exc)))
         self.root.after(3000, run_capture)
 
-    def take_image(self, bounds):
+    def take_image(self, bounds, question=None, attachments=None):
         from PIL import ImageGrab
         try:
             image = ImageGrab.grab(bbox=bounds, all_screens=bounds is not None)
@@ -427,7 +504,7 @@ class Runner:
             self.preview.configure(image=self.preview_image, text='')
             self.activity('Screenshot captured. Preparing the request…')
             self.paint()
-            threading.Thread(target=self.work, args=(image,), daemon=True).start()
+            threading.Thread(target=self.work, args=(image, question, attachments), daemon=True).start()
         except Exception as exc:
             self.events.put(('error', str(exc)))
         finally:
@@ -449,6 +526,9 @@ class Runner:
                         with Image.open(attachment) as source:
                             path = self.session.add_image(ImageOps.exif_transpose(source).convert('RGB'))
                     new_image_count = len(attachments)
+                if image is not None:
+                    path = self.session.add_image(image)
+                    new_image_count += 1
                 history = self.session.images[:-1] if path else self.session.images
                 questions = self.session.questions[:-1] if question else self.session.questions
             elif self.session.batch_target:
@@ -505,6 +585,8 @@ class Runner:
                 elif key == 3:
                     self.close()
                     return
+                elif key == 4:
+                    self.toggle_question_box()
                 elif key in self.batch_key_counts:
                     self.start_batch(self.batch_key_counts[key])
             except Exception as exc:

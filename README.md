@@ -47,13 +47,14 @@ Defaults:
 | --- | --- |
 | Capture foreground window and solve | Ctrl+0 (top row or numpad zero with Num Lock on) |
 | Start a batch of N screenshots | Ctrl+2 through Ctrl+9 (top row or numpad with Num Lock on) |
+| Show/hide only the question text box | Ctrl+Alt+T |
 | Show/hide live activity | Ctrl+Alt+0 |
 | Stop runner | Ctrl+Alt+Q |
 
-Setup lets you change capture, activity and exit hotkeys. Windows reserves the keys while running, so Ctrl+0 will no longer reset browser zoom. Conflicting hotkeys cause a startup error recorded in `%LOCALAPPDATA%/Silentanator/status.json`.
+Setup lets you change capture, activity, text-box and exit hotkeys. Windows reserves the keys while running, so Ctrl+0 will no longer reset browser zoom. Conflicting hotkeys cause a startup error recorded in `%LOCALAPPDATA%/Silentanator/status.json`.
 
 Setup can disable the Ctrl+2…9 batch hotkeys if another app needs them. These count shortcuts are
-reserved while enabled; choose different shortcuts for capture/toggle/exit.
+reserved while enabled; choose different shortcuts for capture/activity/text/exit.
 
 ### Typed questions, charts, and diagrams
 
@@ -63,6 +64,12 @@ attachment requests work too. Text and all attached images are sent as one input
 are PNG, JPEG, WebP, BMP and GIF (first frame). Original files stay unchanged. A text-only request
 does not take a screenshot. Submitted typed questions and images are saved in the current session.
 After a successful save the submitted draft and attachment list are cleared.
+
+For just the text box, press **Ctrl+Alt+T**. Type your question and press **Ctrl+0** to include a
+screenshot automatically, or press **Esc** to hide the box and select a different problem window
+before capturing. The popup returns focus to the window you were studying and stays synced with
+the main question form. **Ctrl+Enter** sends text without taking a screenshot. Any attached images
+also join a normal screenshot request. The draft stays available if the request fails.
 
 Solutions request detailed numbered work: knowns and unknowns, assumptions, governing formulas,
 algebraic transformations, unit conversions, substitutions, intermediate arithmetic, answers and checks.
@@ -75,10 +82,11 @@ No iteration setting or checkbox is required.
 
 ### Screenshot batches
 
-Select the first problem window and press Ctrl+2 for two pictures, Ctrl+3 for three, and so on through
-Ctrl+9. The first picture is captured immediately. Select each next window and press the capture
-hotkey (Ctrl+0 by default), or repeat the same count shortcut. Nothing is sent until the entire batch
-is collected; then all its images are submitted together as one multipart problem or multiple problems.
+Press Ctrl+2 to enter two-picture mode, Ctrl+3 for three, and so on through Ctrl+9. Choosing a count
+does not take a screenshot. Select each problem window and press Ctrl+0 once per picture. For example,
+**Ctrl+2 → Ctrl+0 → Ctrl+0** captures two pictures and sends them together. Repeating the count
+shortcut only shows progress. Nothing is sent until the entire batch is collected; then all its
+images are submitted together as one multipart problem or multiple problems.
 Any typed draft and attached images already in the question form join that batch. For 10–99 pictures, enter the count
 in Live activity and click **Start batch**, then select each problem and press the capture hotkey.
 **Cancel batch** discards it from solver context without sending its pictures or changing earlier notes.

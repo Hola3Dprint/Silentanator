@@ -35,6 +35,20 @@ with tempfile.TemporaryDirectory() as directory:
             assert saved['reference_files'] == [str(selected.resolve())]
             assert saved['output'] == str(output.resolve())
             assert saved['reference_revision']
+            assert saved['text'] == 'Ctrl+Alt+T'
+            app.vars['text'].set(saved['capture'])
+            try:
+                app.values()
+                raise AssertionError('Duplicate text-box hotkey must be rejected')
+            except ValueError as exc:
+                assert 'four distinct' in str(exc)
+            app.vars['text'].set('Ctrl+2')
+            try:
+                app.values()
+                raise AssertionError('Text-box hotkey must respect batch-key reservation')
+            except ValueError as exc:
+                assert 'reserved' in str(exc)
+            app.vars['text'].set('Ctrl+Alt+T')
             revision = saved['reference_revision']
             assert app.save()
             assert save.call_args.args[0]['reference_revision'] == revision, 'Unchanged references must not reset a session'

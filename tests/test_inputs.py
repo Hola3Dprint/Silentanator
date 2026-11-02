@@ -126,6 +126,32 @@ class InputTests(unittest.TestCase):
         self.assertEqual(len(restored.images), 2)
         self.assertTrue(all(Path(path).exists() for path in attachments))
 
+    def test_capture_includes_draft_and_attachment_as_one_current_input(self):
+        app = self.app_worker()
+        old_image = app.session.add_image(Image.new('RGB', (20, 20), 'black'))
+        app.session.add_question('Previous problem')
+        chart = self.directory / 'chart.png'
+        Image.new('RGB', (20, 20), 'green').save(chart)
+        with patch.object(runner, 'solve', return_value=ANSWER) as solve:
+            app.work(Image.new('RGB', (20, 20), 'blue'),
+                     question='Use this screenshot with the chart.', attachments=[str(chart)])
+        solve.assert_called_once()
+        self.assertEqual(solve.call_args.kwargs['question'], 'Use this screenshot with the chart.')
+        self.assertEqual(solve.call_args.kwargs['question_history'], ['Previous problem'])
+        self.assertEqual(solve.call_args.kwargs['new_image_count'], 2)
+        self.assertEqual(solve.call_args.kwargs['history'][0], old_image)
+        self.assertEqual(len(app.session.images), 3)
+        with Image.open(solve.call_args.args[0]) as captured:
+            self.assertEqual(captured.getpixel((0, 0)), (0, 0, 255))
+        self.assertIn(('input_sent', None), list(app.events.queue))
+
+    def test_failed_combined_request_does_not_clear_draft(self):
+        app = self.app_worker()
+        with patch.object(runner, 'solve', side_effect=RuntimeError('Please retry')):
+            app.work(Image.new('RGB', (20, 20)), question='Keep this question')
+        self.assertNotIn(('input_sent', None), list(app.events.queue))
+        self.assertIn(('error', 'Please retry'), list(app.events.queue))
+
     def test_selected_files_and_folder_combine_with_real_source_labels(self):
         folder = self.directory / 'course'
         folder.mkdir()
