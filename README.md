@@ -10,6 +10,10 @@ Download **Silentanator-Setup.exe**, open it, and click **Install**. It installs
 
 In **Silentanator Setup**, choose your notes file, click **Sign in to Codex** to sign in with your own ChatGPT account, then **Check connection** and **Save & run**. No credentials are included in the download. Word is optional for generating notes; use a `.docx` reader to open them.
 
+The **Codex model** dropdown loads automatically from the signed-in account's Codex catalog. It shows screenshot-compatible models and the recommended model, with **Codex default** available at all times. **Refresh models** reloads the catalog; signing in or checking the connection refreshes it too. Refreshing never changes your selection. Previously saved custom model IDs are retained if they are not in the latest catalog. Discovery uses Codex's local app-server model-list interface and does not send a solve request or require an API key.
+
+Each action hotkey has a **Record…** button: click it, hold your modifiers, and press a key. Escape or Cancel keeps the current shortcut. The recorder rejects duplicate shortcuts and reserved batch keys. Recording is active only while that dialog is open; the runner temporarily releases its global shortcuts so recording cannot trigger a capture. Save and restart the runner to apply changes. Manual shortcut entry remains available.
+
 Use **Use existing…** to select a `.docx` full of notes and add to it, or **New…** to choose a new file.
 Existing text, tables, pictures, headers, footers and other sessions are preserved. Before updating an
 existing document, the app saves a timestamped copy under `%LOCALAPPDATA%/Silentanator/backups`.

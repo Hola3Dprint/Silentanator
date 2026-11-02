@@ -13,6 +13,24 @@ from .core import DATA, find_codex, hidden_process, setup_settings, require_subs
 from .windows import SingleInstance, enable_dpi, parse_hotkey
 from .course_context import reference_folder, reference_file_paths
 from .updater import UpdateControl
+from .models import list_codex_models
+from .hotkey_recorder import HotkeyRecorder
+
+
+HOTKEY_FIELDS = ('capture', 'toggle', 'quit', 'text')
+
+
+def validate_shortcuts(values):
+    parsed = [parse_hotkey(values[key]) for key in HOTKEY_FIELDS]
+    # Numeric shortcuts also reserve the matching numpad key in the runner.
+    normalized = [(mods, code - 0x60 + ord('0') if 0x60 <= code <= 0x69 else code)
+                  for mods, code in parsed]
+    if len(set(normalized)) != 4:
+        raise ValueError('Choose four distinct hotkeys.')
+    if values['batch_hotkeys']:
+        ctrl_mods = parse_hotkey('Ctrl+2')[0]
+        if any(mods == ctrl_mods and ord('2') <= code <= ord('9') for mods, code in normalized):
+            raise ValueError('Ctrl+2…9 are reserved for batch counts. Choose other action hotkeys or disable batch hotkeys.')
 
 
 def runner_command():
@@ -60,14 +78,29 @@ class Setup:
         self.updater.frame.pack(side='right', padx=(8, 0))
         ttk.Label(frame, text='Capture on demand. Solve through your ChatGPT-signed-in Codex CLI.').grid(row=1, column=0, columnspan=3, sticky='w', pady=(4, 20))
         self.vars = {}
+        self.model_catalog = []
+        self.models_cancel = threading.Event()
+        self.models_generation = 0
+        self.login_process = None
+        self.recorder = None
         fields = [('output', 'Word file (create or add to)'), ('codex', 'Codex executable (auto if blank)'),
-                  ('model', 'Model (Codex default if blank)'), ('capture', 'Capture hotkey'),
+                  ('model', 'Codex model'), ('capture', 'Capture hotkey'),
                   ('toggle', 'Show/hide activity hotkey'), ('quit', 'Exit hotkey'),
                   ('text', 'Show/hide text box hotkey')]
         for row, (key, label) in enumerate(fields, 2):
             ttk.Label(frame, text=label).grid(row=row, column=0, sticky='w', padx=(0, 12), pady=7)
             var = self.vars[key] = tk.StringVar(value=self.restored_form.get(key, self.settings[key]))
-            ttk.Entry(frame, textvariable=var).grid(row=row, column=1, sticky='ew', pady=7)
+            if key == 'model':
+                self.model_choice = tk.StringVar()
+                self.model_combo = ttk.Combobox(frame, state='readonly', textvariable=self.model_choice)
+                self.model_combo.grid(row=row, column=1, sticky='ew', pady=7)
+                self.model_combo.bind('<<ComboboxSelected>>', self.select_model)
+                self.models_button = ttk.Button(frame, text='Refresh models', command=self.refresh_models)
+                self.models_button.grid(row=row, column=2, padx=(8, 0))
+                self.sync_model_choices()
+                var.trace_add('write', lambda *args: self.sync_model_choices())
+            else:
+                ttk.Entry(frame, textvariable=var).grid(row=row, column=1, sticky='ew', pady=7)
             if key == 'output':
                 output_buttons = ttk.Frame(frame)
                 output_buttons.grid(row=row, column=2, padx=(8, 0))
@@ -75,6 +108,8 @@ class Setup:
                 ttk.Button(output_buttons, text='New…', command=lambda: self.browse('output')).pack(side='left', padx=(4, 0))
             elif key == 'codex':
                 ttk.Button(frame, text='Browse', command=lambda k=key: self.browse(k)).grid(row=row, column=2, padx=(8, 0))
+            elif key in HOTKEY_FIELDS:
+                ttk.Button(frame, text='Record…', command=lambda k=key, label=label: self.record_hotkey(k, label)).grid(row=row, column=2, padx=(8, 0))
         self.vars['scope'] = tk.StringVar(value=self.restored_form.get('scope', self.settings['scope']))
         ttk.Label(frame, text='Capture area').grid(row=9, column=0, sticky='w', pady=7)
         ttk.Combobox(frame, values=['active', 'primary'], state='readonly', textvariable=self.vars['scope']).grid(row=9, column=1, sticky='ew')
@@ -124,6 +159,57 @@ class Setup:
         self.root.protocol('WM_DELETE_WINDOW', self.close)
         if self.restored_form:
             self.update_draft.unlink(missing_ok=True)
+        self.root.after(0, self.refresh_models)
+
+    def sync_model_choices(self):
+        self.model_labels = {'Codex default': ''}
+        for entry in self.model_catalog:
+            label = entry['name'] + ' (' + entry['model'] + ')'
+            if entry['default']:
+                label += ' — recommended'
+            self.model_labels[label] = entry['model']
+        current = self.vars['model'].get()
+        if current and current not in self.model_labels.values():
+            self.model_labels[current + ' (current selection)'] = current
+        self.model_combo.configure(values=list(self.model_labels))
+        self.model_choice.set(next(label for label, model in self.model_labels.items() if model == current))
+
+    def select_model(self, event=None):
+        self.vars['model'].set(self.model_labels[self.model_choice.get()])
+
+    def refresh_models(self):
+        if getattr(self, 'closed', False):
+            return
+        self.models_cancel.set()
+        self.models_cancel = threading.Event()
+        cancel = self.models_cancel
+        self.models_generation += 1
+        generation = self.models_generation
+        configured = self.vars['codex'].get()
+        self.models_button.configure(state='disabled')
+        self.status.set('Loading models from your signed-in Codex account…')
+        def work():
+            try:
+                models = list_codex_models(configured, cancel=cancel)
+                self.events.put(('models', generation, models))
+            except Exception as exc:
+                self.events.put(('models_error', generation, str(exc)))
+        threading.Thread(target=work, daemon=True).start()
+
+    def record_hotkey(self, key, label):
+        if self.recorder and not self.recorder.closed:
+            self.recorder.window.focus_force()
+            return
+        def accept(shortcut):
+            values = {name: self.vars[name].get() for name in (*HOTKEY_FIELDS, 'batch_hotkeys')}
+            values[key] = shortcut
+            validate_shortcuts(values)
+            self.vars[key].set(shortcut)
+            self.status.set('Recorded ' + label.lower() + ': ' + shortcut + '. Save and restart the runner to apply.')
+        try:
+            self.recorder = HotkeyRecorder(self.root, label, accept)
+        except RuntimeError as exc:
+            self.status.set(str(exc))
 
     def browse(self, key):
         if key == 'output':
@@ -132,6 +218,8 @@ class Setup:
             result = filedialog.askopenfilename(filetypes=[('Codex executable', 'codex.exe')])
         if result:
             self.vars[key].set(result)
+            if key == 'codex':
+                self.refresh_models()
 
     def existing_notes(self):
         result = filedialog.askopenfilename(title='Choose existing Word notes to add to', filetypes=[('Word document', '*.docx')])
@@ -161,14 +249,7 @@ class Setup:
         changed = (values['reference_folder'] != self.settings.get('reference_folder', '') or
                    values['reference_files'] != self.settings.get('reference_files', []))
         values['reference_revision'] = uuid.uuid4().hex if changed else self.settings.get('reference_revision', '')
-        parsed = [parse_hotkey(values[k]) for k in ('capture', 'toggle', 'quit', 'text')]
-        if len(set(parsed)) != 4:
-            raise ValueError('Choose four distinct hotkeys.')
-        if values['batch_hotkeys']:
-            ctrl_mods = parse_hotkey('Ctrl+2')[0]
-            if any(mods == ctrl_mods and (ord('2') <= code <= ord('9') or 0x62 <= code <= 0x69)
-                   for mods, code in parsed):
-                raise ValueError('Ctrl+2…9 are reserved for batch counts. Choose other action hotkeys or disable batch hotkeys.')
+        validate_shortcuts(values)
         find_codex(values['codex'])
         return values
 
@@ -201,6 +282,9 @@ class Setup:
         if getattr(self, 'closed', False):
             return
         self.closed = True
+        self.models_cancel.set()
+        if self.recorder:
+            self.recorder.close()
         self.updater.close()
         self.root.destroy()
 
@@ -218,12 +302,12 @@ class Setup:
         def operation():
             executable = find_codex(configured)
             require_subscription(executable)
-            return 'ChatGPT subscription sign-in is ready. Image requests use your Codex allowance.'
+            return ('connected', 'ChatGPT subscription sign-in is ready. Image requests use your Codex allowance.')
         self.background(operation)
 
     def sign_in(self):
         try:
-            subprocess.Popen([find_codex(self.vars['codex'].get()), 'login'],
+            self.login_process = subprocess.Popen([find_codex(self.vars['codex'].get()), 'login'],
                              creationflags=subprocess.CREATE_NEW_CONSOLE)
         except Exception as exc:
             messagebox.showerror('Sign in', str(exc))
@@ -258,8 +342,26 @@ class Setup:
             self.status.set('The runner has not recorded a status yet.')
 
     def poll(self):
+        if self.login_process is not None and self.login_process.poll() is not None:
+            self.login_process = None
+            self.refresh_models()
         while not self.events.empty():
-            self.status.set(self.events.get_nowait())
+            event = self.events.get_nowait()
+            if isinstance(event, tuple) and event[0] in ('models', 'models_error'):
+                kind, generation, value = event
+                if generation != self.models_generation:
+                    continue
+                self.models_button.configure(state='normal')
+                if kind == 'models':
+                    self.model_catalog = value
+                    self.sync_model_choices()
+                    self.status.set(f'Loaded {len(value)} screenshot-compatible Codex models. Choose a model or Codex default.')
+                else:
+                    self.status.set('Could not load models: ' + value + ' Sign in, then click Refresh models. Your selection is unchanged.')
+            elif isinstance(event, tuple) and event[0] == 'connected':
+                self.refresh_models()
+            else:
+                self.status.set(event)
         self.root.after(100, self.poll)
 
     def run(self):

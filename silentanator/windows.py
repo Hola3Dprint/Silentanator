@@ -51,11 +51,28 @@ def parse_hotkey(text):
         code = 0x60 + int(key[6:])
     elif key.startswith('F') and key[1:].isdigit() and 1 <= int(key[1:]) <= 24:
         code = 111 + int(key[1:])
+    elif key in KEY_NAMES:
+        code = KEY_NAMES[key]
     else:
-        raise ValueError('Use a letter, digit, or F1 through F24 as the hotkey.')
+        raise ValueError('Use a letter, digit, function key, or a supported navigation key.')
     if mods == 0x4000:
         raise ValueError('Include at least one modifier such as Ctrl.')
     return mods, code
+
+
+KEY_NAMES = {'SPACE': 0x20, 'TAB': 0x09, 'ENTER': 0x0D, 'BACKSPACE': 0x08,
+             'DELETE': 0x2E, 'INSERT': 0x2D, 'HOME': 0x24, 'END': 0x23,
+             'PAGEUP': 0x21, 'PAGEDOWN': 0x22, 'LEFT': 0x25, 'UP': 0x26,
+             'RIGHT': 0x27, 'DOWN': 0x28, 'PAUSE': 0x13, 'PRINTSCREEN': 0x2C,
+             'SCROLLLOCK': 0x91}
+
+
+def hotkey_recording_active():
+    handle = kernel.OpenMutexW(0x00100000, False, 'Local\\SilentanatorHotkeyRecording')
+    if handle:
+        kernel.CloseHandle(handle)
+        return True
+    return False
 
 
 class Hotkeys:
@@ -78,7 +95,7 @@ class Hotkeys:
         # on its GUI thread before a timer-based PeekMessage can inspect them.
         self.thread_id = kernel.GetCurrentThreadId()
         bindings = {}
-        try:
+        def register():
             for index, key in enumerate(keys, 1):
                 mods, code = parse_hotkey(key)
                 if not user.RegisterHotKey(None, index, mods, code):
@@ -91,11 +108,27 @@ class Hotkeys:
                     if user.RegisterHotKey(None, alias, mods, 0x60 + code - ord('0')):
                         self.ids.append(alias)
                         bindings[alias] = index
+        def unregister():
+            for index in self.ids:
+                user.UnregisterHotKey(None, index)
+            self.ids.clear()
+            bindings.clear()
+        try:
+            paused = hotkey_recording_active()
+            if not paused:
+                register()
             self.ready.set()
             message = W.MSG()
             while not self.stop.is_set():
+                recording = hotkey_recording_active()
+                if recording and not paused:
+                    unregister()
+                    paused = True
+                elif paused and not recording:
+                    register()
+                    paused = False
                 while user.PeekMessageW(ctypes.byref(message), None, 0x0312, 0x0312, 1):
-                    if message.wParam in bindings:
+                    if not paused and message.wParam in bindings:
                         self.messages.put(bindings[message.wParam])
                 self.stop.wait(0.01)
         except Exception as exc:
@@ -107,9 +140,12 @@ class Hotkeys:
             self.ready.set()
 
     def poll(self):
+        recording = hotkey_recording_active()
         while True:
             try:
-                yield self.messages.get_nowait()
+                key = self.messages.get_nowait()
+                if not recording:
+                    yield key
             except queue.Empty:
                 return
 
