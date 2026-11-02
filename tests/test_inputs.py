@@ -92,6 +92,22 @@ class InputTests(unittest.TestCase):
         self.assertEqual(restored.batch_images, [])
         self.assertEqual(restored.batch_target, 0)
 
+    def test_batch_keeps_typed_draft_and_attached_chart_until_complete(self):
+        app = self.app_worker()
+        chart = self.directory / 'Attached chart.png'
+        Image.new('RGB', (20, 20), 'green').save(chart)
+        app.session.begin_batch(2, 'Use the chart with both screenshots.', [str(chart)])
+        with patch.object(runner, 'solve', return_value=ANSWER) as solve:
+            app.work(Image.new('RGB', (20, 20), 'red'))
+            solve.assert_not_called()
+            app.session = core.StudySession(app.settings['output'])
+            self.assertEqual(app.session.batch_attachments, [str(chart)])
+            app.work(Image.new('RGB', (20, 20), 'blue'))
+        solve.assert_called_once()
+        self.assertEqual(solve.call_args.kwargs['new_image_count'], 3)
+        self.assertEqual(solve.call_args.kwargs['question'], 'Use the chart with both screenshots.')
+        self.assertEqual(len(app.session.images), 3)
+
     def test_typed_question_and_two_diagrams_are_sent_together(self):
         app = self.app_worker()
         attachments = []
@@ -168,6 +184,15 @@ class InputTests(unittest.TestCase):
         settings['reference_revision'] = 'new-setup-choice'
         with patch.object(core, 'load_settings', return_value=dict(settings)):
             self.assertEqual(core.setup_settings()['reference_folder'], str(self.directory))
+
+    def test_solver_selects_iteration_automatically_without_an_option(self):
+        with patch.object(core, '_solve_request', return_value=ANSWER) as request:
+            core.solve(None, core.DEFAULTS,
+                       question='Find the positive root of cos(x)=x.', new_image_count=0)
+        prompt = request.call_args.kwargs['base_prompt']
+        self.assertIn('Automatically determine for EACH', prompt)
+        self.assertIn('initial guess or bracket', prompt)
+        self.assertIn('one plain-text', prompt)
 
 
 if __name__ == '__main__':

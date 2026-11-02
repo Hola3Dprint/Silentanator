@@ -122,12 +122,12 @@ class Runner:
         self.question_input.bind('<Control-Return>', self.submit_question)
         question_buttons = ttk.Frame(question_frame)
         question_buttons.pack(fill='x', pady=(5, 0))
-        self.attached_images = []
+        self.attached_images = list(self.session.batch_attachments)
         self.attach_button = ttk.Button(question_buttons, text='Attach images…', command=self.attach_images)
         self.attach_button.pack(side='left')
         self.clear_attachments_button = ttk.Button(question_buttons, text='Clear images', command=self.clear_attachments)
         self.clear_attachments_button.pack(side='left', padx=5)
-        self.attachment_info = tk.StringVar(value='0 images')
+        self.attachment_info = tk.StringVar(value=f'{len(self.attached_images)} images')
         ttk.Label(question_buttons, textvariable=self.attachment_info).pack(side='left')
         self.solve_button = ttk.Button(question_buttons, text='Solve (Ctrl+Enter)', command=self.submit_question)
         self.solve_button.pack(side='right')
@@ -141,7 +141,10 @@ class Runner:
         self.batch_button.pack(side='left')
         self.cancel_batch_button = ttk.Button(batch_row, text='Cancel batch', command=self.cancel_batch)
         self.cancel_batch_button.pack(side='left', padx=5)
-        ttk.Label(frame, text=f'Ctrl+2…9: start that many pictures. {self.settings["capture"]}: capture remaining pictures. Typed text above joins the batch.',
+        batch_help = (f'Ctrl+2…9: start that many pictures. {self.settings["capture"]}: capture remaining pictures.'
+                      if self.settings.get('batch_hotkeys', True) else
+                      f'Count hotkeys are off. Use Start batch, then capture with {self.settings["capture"]}.')
+        ttk.Label(frame, text=batch_help + ' Typed text and attached images join the batch.',
                   wraplength=760).pack(anchor='w', pady=(0, 5))
         ttk.Label(frame, textvariable=self.stage, font=('Segoe UI', 11, 'bold'), wraplength=760).pack(anchor='w')
         self.progress = ttk.Progressbar(frame, mode='indeterminate')
@@ -269,7 +272,10 @@ class Runner:
                 return
             if not self.apply_reference_folder():
                 return
-            self.session.begin_batch(count, self.question_input.get('1.0', 'end'))
+            question = self.question_input.get('1.0', 'end').strip()
+            if len(question) > 30000:
+                raise ValueError('Keep a typed question under 30,000 characters.')
+            self.session.begin_batch(count, question, self.attached_images)
             self.session_info.set(self.session_summary())
             self.set_input_state('normal')
             self.activity(self.batch_message())
@@ -438,10 +444,17 @@ class Runner:
                 history = self.session.images[:-1] if path else self.session.images
                 questions = self.session.questions[:-1] if question else self.session.questions
             elif self.session.batch_target:
-                if not self.session.collect_batch_image(image):
+                if len(self.session.batch_images) < self.session.batch_target and not self.session.collect_batch_image(image):
                     self.events.put(('batch_wait', self.batch_message()))
                     return
+                attachments = list(self.session.batch_attachments)
                 path, new_image_count, question = self.session.commit_batch()
+                if attachments:
+                    from PIL import Image, ImageOps
+                    for attachment in attachments:
+                        with Image.open(attachment) as source:
+                            path = self.session.add_image(ImageOps.exif_transpose(source).convert('RGB'))
+                    new_image_count += len(attachments)
                 if question:
                     self.session.add_question(question)
                 history = self.session.images[:-1]
