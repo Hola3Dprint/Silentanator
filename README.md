@@ -38,11 +38,12 @@ Only a capture hotkey or the countdown button takes a screenshot. Choose the act
 
 ### Course context
 
-In Live activity (Ctrl+Alt+0), choose **Course for this session**. The course list comes from
-`Documents/StudyFlow`; change the parent folder in Setup under **Course references**.
-Each course is a direct child folder. Workspaces and generated output folders are excluded.
-Changing course starts a new session and preserves earlier notes. The selected course is restored
-after restarting. Choose **Screenshot only** to solve without course references.
+In Live activity (Ctrl+Alt+0), paste a path into **Reference folder** and press Enter.
+Use a course folder or a parent folder containing all your materials; subfolders are searched
+recursively. Paths copied with quotes from Explorer work too. Workspaces and generated output
+folders are excluded. Changing folders starts a new session and preserves earlier notes.
+The folder path is restored after restarting. Leave the box blank to solve from screenshots only.
+Invalid paths are reported without changing the current session or starting a capture.
 
 For a course solve, the app first identifies search terms from the problem image using Codex,
 then searches a local text index of that course's PDFs, DOCX, PPTX, Markdown, text and HTML files.

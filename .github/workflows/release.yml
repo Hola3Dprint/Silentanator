@@ -24,6 +24,8 @@ jobs:
         run: |
           ./.venv/Scripts/python.exe -m unittest discover -s tests -v
           if ($LASTEXITCODE -ne 0) { throw 'Tests failed' }
+          ./.venv/Scripts/python.exe -m tests.runner_smoke
+          if ($LASTEXITCODE -ne 0) { throw 'Native UI regression failed' }
           ./.venv/Scripts/python.exe -m tests.hotkey_loop_check
           if ($LASTEXITCODE -ne 0) { throw 'Hotkey regression failed' }
           ./scripts/test_installer.ps1

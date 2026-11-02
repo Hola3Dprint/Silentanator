@@ -17,10 +17,29 @@ with patch.object(runner, 'load_settings', return_value=settings), patch.object(
     def after_notice():
         try:
             assert app.root.state() == 'normal', 'Activity window must remain visible'
-            for control in (app.capture_button, app.new_session_button, app.course_picker):
+            for control in (app.capture_button, app.new_session_button, app.reference_entry):
                 assert control.winfo_ismapped(), 'Session controls must remain visible'
                 assert control.winfo_rooty() + control.winfo_height() <= app.root.winfo_rooty() + app.root.winfo_height(), 'Session controls must fit inside the window'
             assert not app.notice.winfo_exists(), 'Startup notice lasted more than a second'
+            reference = qa / 'Pasted references'
+            reference.mkdir(exist_ok=True)
+            original_session = app.session.id
+            app.folder_path.set('"' + str(reference) + '"')
+            app.reference_entry.focus_force()
+            app.root.update()
+            app.reference_entry.event_generate('<Return>')
+            app.root.update()
+            assert app.session.course == str(reference.resolve()), 'Pasted path must apply on Enter'
+            assert app.session.id != original_session, 'Changing folder must create a new session'
+            restored = core.StudySession(settings['output'])
+            assert restored.course == app.session.course, 'Pasted folder must survive restart'
+            current_session = app.session.id
+            app.folder_path.set(str(qa / 'missing-reference-folder'))
+            assert not app.apply_reference_folder(), 'Invalid folder must be rejected'
+            assert app.session.id == current_session, 'Invalid folder must preserve current session'
+            app.folder_path.set('')
+            assert app.apply_reference_folder()
+            assert app.session.course is None, 'Blank box must disable folder context'
             app.set_silent(True)
             assert app.root.state() == 'withdrawn'
             assert app.dot.state() == 'normal'

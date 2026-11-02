@@ -66,12 +66,8 @@ class Setup:
         ttk.Button(links, text='Show last status', command=self.show_status).pack(side='left', padx=8)
         course_frame = ttk.LabelFrame(frame, text='Course references', padding=8)
         course_frame.grid(row=15, column=0, columnspan=3, sticky='ew', pady=(8, 0))
-        course_frame.columnconfigure(0, weight=1)
-        self.vars['courses_root'] = tk.StringVar(value=self.settings['courses_root'])
-        ttk.Entry(course_frame, textvariable=self.vars['courses_root']).grid(row=0, column=0, sticky='ew')
-        ttk.Button(course_frame, text='Browse', command=self.browse_courses).grid(row=0, column=1, padx=(8, 0))
-        ttk.Label(course_frame, text='Choose a course in Live activity (Ctrl+Alt+0) for each session.\nSelected excerpts are sent to OpenAI with the problem; source files stay unchanged.',
-                  wraplength=640).grid(row=1, column=0, columnspan=2, sticky='w', pady=(6, 0))
+        ttk.Label(course_frame, text='In Live activity, paste the folder containing your reference documents.\nSubfolders are searched too. Leave the box blank for screenshot only.\nSelected excerpts are sent to OpenAI with the problem; source files stay unchanged.',
+                  wraplength=640).grid(row=0, column=0, sticky='w')
         self.status = tk.StringVar(value='Ready to configure. Use the exit hotkey or Task Manager to stop the runner.')
         ttk.Label(frame, textvariable=self.status, wraplength=665, foreground='#395575').grid(row=16, column=0, columnspan=3, sticky='w', pady=(16, 0))
         self.events = queue.Queue()
@@ -81,11 +77,6 @@ class Setup:
         self.root.geometry(f'{width}x{height}')
         self.root.minsize(width, height)
         self.root.after(100, self.poll)
-
-    def browse_courses(self):
-        result = filedialog.askdirectory(initialdir=self.vars['courses_root'].get(), title='StudyFlow courses folder')
-        if result:
-            self.vars['courses_root'].set(result)
 
     def browse(self, key):
         if key == 'output':
@@ -100,9 +91,6 @@ class Setup:
         if not values['output'].strip() or Path(values['output']).suffix.lower() != '.docx':
             raise ValueError('Choose a Word file ending in .docx.')
         values['output'] = str(Path(values['output']).expanduser().resolve())
-        if values['courses_root'].strip() and not Path(values['courses_root']).expanduser().is_dir():
-            raise ValueError('Choose an existing folder containing your course folders.')
-        values['courses_root'] = str(Path(values['courses_root']).expanduser().resolve()) if values['courses_root'].strip() else ''
         parsed = [parse_hotkey(values[k]) for k in ('capture', 'toggle', 'quit')]
         if len(set(parsed)) != 3:
             raise ValueError('Choose three distinct hotkeys.')

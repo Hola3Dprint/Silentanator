@@ -17,7 +17,6 @@ DEFAULTS = {
     'codex': '', 'model': '', 'capture': 'Ctrl+0',
     'toggle': 'Ctrl+Alt+0', 'quit': 'Ctrl+Alt+Q',
     'cues': False, 'dot': True, 'silent': True, 'scope': 'active',
-    'courses_root': str(Path.home() / 'Documents' / 'StudyFlow'),
 }
 SCHEMA = {
     'type': 'object', 'additionalProperties': False,

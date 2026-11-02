@@ -7,7 +7,7 @@ description: Maintain and validate course-document retrieval in Silentanator, in
 
 ## Architecture and constraints
 
-- `silentanator/course_context.py` discovers direct course folders, extracts source-labelled text, caches by file metadata, and retrieves bounded excerpts. `core.solve` uses a screenshot-only Codex query to obtain search terms before the final solve. Preserve the no-tools prompt, read-only sandbox, ChatGPT sign-in path, and credential isolation.
+- `silentanator/course_context.py` accepts a pasted reference-folder path, recursively extracts source-labelled text, caches by file metadata, and retrieves bounded excerpts. The folder may contain one course or all materials. Keep the UI as a plain path box, not a course dropdown. `core.solve` uses a screenshot-only Codex query to obtain search terms before the final solve. Preserve the no-tools prompt, read-only sandbox, ChatGPT sign-in path, and credential isolation.
 - Store selection in `StudySession` state, not a global course setting. Changing course starts a fresh session while preserving earlier notes. Restore selection across restarts. Existing sessions without a course remain screenshot-only.
 - Never alter source documents. Exclude generated Workspaces/output folders, avoid following reparse points, deduplicate content, and refresh changed/deleted sources. Keep filenames and PDF page/slide labels attached to every excerpt.
 - State extraction gaps, especially image-only PDF pages, diagrams, encrypted files, and size limits. Do not equate extracted text with full document coverage. Cite only references actually used and distinguish general methods when retrieval is insufficient.
@@ -32,6 +32,9 @@ Inspect the native UI after changing layout. Tk pack order can let an expanding 
 later controls: reserve bottom controls before allocating the remaining space to the notes.
 Verify actual course selection writes the expected session state. Preserve and restore the user's
 active-session pointer when doing disposable UI tests; do not capture unrelated desktop content.
+For the folder box, verify quoted paths with spaces, Enter/focus-loss application, validation before
+capture, blank input, and restart persistence. Focus the entry before generating a keyboard event
+in Tk smoke tests; otherwise the key event may not invoke its binding.
 
 For an authorized Windows release, use `build.ps1` and `scripts/build_installer.ps1` with the .NET 8
 SDK. Verify the installer payload, bundled CLI/runtime, upgrade preservation of settings/session,

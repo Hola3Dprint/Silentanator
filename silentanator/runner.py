@@ -9,7 +9,7 @@ import os
 
 from .core import DATA, StudySession, clear_session_pending, load_settings, solve, append_notes, save_pending
 from .windows import Hotkeys, SingleInstance, capture_bounds, contain_children, enable_dpi, no_activate
-from .course_context import courses
+from .course_context import reference_folder
 
 
 def record_status(state, detail=''):
@@ -81,17 +81,13 @@ class Runner:
         ttk.Label(frame, textvariable=self.session_info).pack(anchor='w', pady=(0, 5))
         course_row = ttk.Frame(frame)
         course_row.pack(fill='x', pady=(0, 8))
-        ttk.Label(course_row, text='Course for this session:').pack(side='left', padx=(0, 8))
-        self.course_paths = {'Screenshot only': None}
-        self.course_paths.update({p.name: str(p.resolve()) for p in courses(self.settings['courses_root'])})
-        if self.session.course:
-            self.course_paths[Path(self.session.course).name] = self.session.course
-        self.course_choice = tk.StringVar(value=Path(self.session.course).name if self.session.course else 'Screenshot only')
-        self.course_picker = ttk.Combobox(course_row, state='readonly', textvariable=self.course_choice,
-                                         values=list(self.course_paths), width=48)
-        self.course_picker.pack(side='left', fill='x', expand=True)
-        self.course_picker.bind('<<ComboboxSelected>>', self.select_course)
-        ttk.Label(frame, text='Course excerpts used for solving are sent to OpenAI. Changing courses starts a new session.',
+        ttk.Label(course_row, text='Reference folder:').pack(side='left', padx=(0, 8))
+        self.folder_path = tk.StringVar(value=self.session.course or '')
+        self.reference_entry = ttk.Entry(course_row, textvariable=self.folder_path, width=48)
+        self.reference_entry.pack(side='left', fill='x', expand=True)
+        self.reference_entry.bind('<Return>', self.apply_reference_folder)
+        self.reference_entry.bind('<FocusOut>', self.apply_reference_folder)
+        ttk.Label(frame, text='Paste a folder path; subfolders are searched too. Leave blank for screenshot only.\nPress Enter to use it. Selected excerpts are sent to OpenAI; changing folders starts a new session.',
                   wraplength=760).pack(anchor='w', pady=(0, 5))
         ttk.Label(frame, textvariable=self.stage, font=('Segoe UI', 11, 'bold'), wraplength=760).pack(anchor='w')
         self.progress = ttk.Progressbar(frame, mode='indeterminate')
@@ -147,22 +143,35 @@ class Runner:
         if self.busy:
             self.activity('Wait for the current capture to finish before starting a new session.')
             return
-        self.session = StudySession(self.settings['output'], fresh=True,
-                                    course=self.course_paths[self.course_choice.get()])
+        try:
+            folder = reference_folder(self.folder_path.get())
+        except (OSError, ValueError) as exc:
+            self.activity(str(exc))
+            return False
+        self.session = StudySession(self.settings['output'], fresh=True, course=folder)
+        self.folder_path.set(folder or '')
         self.session_info.set('Session: 0 images')
         self.answer_view.configure(state='normal')
         self.answer_view.delete('1.0', 'end')
         self.answer_view.configure(state='disabled')
         self.preview.configure(image='', text='The most recent screenshot will appear here.')
         self.activity('New session started. Earlier notes remain in the document.')
+        return True
 
-    def select_course(self, event=None):
+    def apply_reference_folder(self, event=None):
         if self.busy:
-            self.course_choice.set(Path(self.session.course).name if self.session.course else 'Screenshot only')
-            return
-        if self.course_paths[self.course_choice.get()] != self.session.course:
-            self.new_session()
-            self.activity('Selected course: ' + self.course_choice.get())
+            return False
+        try:
+            folder = reference_folder(self.folder_path.get())
+        except (OSError, ValueError) as exc:
+            self.activity(str(exc))
+            return False
+        if folder != self.session.course:
+            if not self.new_session():
+                return False
+            self.activity('Reference folder: ' + (folder or 'none (screenshot only)'))
+        self.folder_path.set(folder or '')
+        return True
 
     def open_notes(self):
         try:
@@ -199,6 +208,8 @@ class Runner:
         if self.busy:
             self.activity('A request is already running. Waiting for it to finish.')
             return
+        if not self.apply_reference_folder():
+            return
         # Acquire foreground bounds before hiding our non-activating overlays.
         bounds = capture_bounds(self.settings['scope'])
         from .windows import user
@@ -216,11 +227,13 @@ class Runner:
         self.paint()
         self.capture_button.configure(state='disabled')
         self.new_session_button.configure(state='disabled')
-        self.course_picker.configure(state='disabled')
+        self.reference_entry.configure(state='disabled')
         self.root.after(100, lambda: self.take_image(bounds))
 
     def delayed_capture(self):
         if self.busy:
+            return
+        if not self.apply_reference_folder():
             return
         self.capture_button.configure(state='disabled')
         self.activity('Capture in 3 seconds. Select the problem window now…')
@@ -304,7 +317,7 @@ class Runner:
             self.busy = False
             self.capture_button.configure(state='normal')
             self.new_session_button.configure(state='normal')
-            self.course_picker.configure(state='readonly')
+            self.reference_entry.configure(state='normal')
             self.progress.stop()
             self.activity(('Error: ' if state == 'error' else '') + detail)
             record_status(self.state, detail)

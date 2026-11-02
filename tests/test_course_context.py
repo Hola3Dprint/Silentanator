@@ -5,7 +5,7 @@ import unittest
 from unittest.mock import patch
 
 from silentanator import core
-from silentanator.course_context import build_index, courses, retrieve, reference_prompt
+from silentanator.course_context import build_index, reference_folder, retrieve, reference_prompt
 
 
 class CourseTests(unittest.TestCase):
@@ -31,11 +31,20 @@ class CourseTests(unittest.TestCase):
             for name in ('Aero', 'Mech Comp', 'Workspaces'):
                 (root / name).mkdir()
                 (root / name / 'notes.md').write_text(name + ' characteristic unique content', encoding='utf-8')
-            self.assertEqual([p.name for p in courses(root)], ['Aero', 'Mech Comp'])
             index = build_index(root / 'Aero', root / 'cache')
             self.assertEqual(index['course'], 'Aero')
             self.assertNotIn('Mech Comp', json.dumps(index))
             self.assertEqual(len(index['files']), 1)
+            combined = build_index(root, root / 'cache')
+            self.assertEqual(len(combined['files']), 2)
+            self.assertNotIn('Workspaces/notes.md', combined['files'])
+
+    def test_pasted_folder_quotes_spaces_blank_and_invalid_path(self):
+        with tempfile.TemporaryDirectory(prefix='references with spaces ') as directory:
+            self.assertEqual(reference_folder('  "' + directory + '"  '), str(Path(directory).resolve()))
+            self.assertIsNone(reference_folder('  '))
+            with self.assertRaises(ValueError):
+                reference_folder(str(Path(directory) / 'missing'))
 
     def test_source_citations_and_unreadable_file_warning(self):
         with tempfile.TemporaryDirectory() as directory:

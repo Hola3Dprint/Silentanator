@@ -19,14 +19,16 @@ def linked(path):
     return bool(getattr(path.lstat(), 'st_file_attributes', 0) & stat.FILE_ATTRIBUTE_REPARSE_POINT) or path.is_symlink()
 
 
-def courses(root):
-    if not root:
-        return []
-    root = Path(root).expanduser()
-    if not root.is_dir():
-        return []
-    return sorted((p for p in root.iterdir() if p.is_dir() and p.name.lower() not in SKIP
-                   and not linked(p)), key=lambda p: p.name.casefold())
+def reference_folder(value):
+    """Accept a pasted Windows folder path, including Explorer's quoted Copy as path."""
+    import os
+    value = value.strip().strip('"').strip()
+    if not value:
+        return None
+    path = Path(os.path.expandvars(value)).expanduser()
+    if not path.is_dir():
+        raise ValueError('Reference folder not found. Paste an existing folder path, or leave it blank.')
+    return str(path.resolve())
 
 
 def tokens(text):
