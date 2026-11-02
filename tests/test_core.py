@@ -17,6 +17,13 @@ ANSWER = {'sections': [{'heading': 'Quadratic formula', 'blocks': [
 
 
 class NotesTests(unittest.TestCase):
+    def setUp(self):
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        patcher = patch.object(core, 'DATA', Path(directory.name))
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
     def test_equations_are_editable_and_append_preserves_notes(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / 'Notes.docx'

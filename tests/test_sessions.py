@@ -19,6 +19,13 @@ def doc_xml(path):
 
 
 class SessionTests(unittest.TestCase):
+    def setUp(self):
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        patcher = patch.object(core, 'DATA', Path(directory.name))
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
     def test_update_replaces_own_session_and_preserves_other_notes(self):
         with tempfile.TemporaryDirectory() as directory:
             output = Path(directory) / 'Notes.docx'

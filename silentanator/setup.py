@@ -5,11 +5,13 @@ import subprocess
 import sys
 import threading
 import queue
+import uuid
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 
-from .core import DATA, find_codex, hidden_process, load_settings, require_subscription, retry_pending, save_settings
+from .core import DATA, find_codex, hidden_process, setup_settings, require_subscription, retry_pending, save_settings
 from .windows import SingleInstance, enable_dpi, parse_hotkey
+from .course_context import reference_folder, reference_file_paths
 
 
 def runner_command():
@@ -21,7 +23,7 @@ def runner_command():
 class Setup:
     def __init__(self):
         enable_dpi()
-        self.settings = load_settings()
+        self.settings = setup_settings()
         self.root = tk.Tk()
         self.root.title('Silentanator Setup')
         self.root.geometry('740x700')
@@ -30,52 +32,80 @@ class Setup:
         style.theme_use('vista')
         style.configure('TLabel', font=('Segoe UI', 10))
         style.configure('TButton', padding=7)
-        frame = ttk.Frame(self.root, padding=24)
-        frame.pack(fill='both', expand=True)
+        container = ttk.Frame(self.root)
+        container.pack(fill='both', expand=True)
+        canvas = tk.Canvas(container, highlightthickness=0)
+        scroll = ttk.Scrollbar(container, orient='vertical', command=canvas.yview)
+        canvas.configure(yscrollcommand=scroll.set)
+        scroll.pack(side='right', fill='y')
+        canvas.pack(side='left', fill='both', expand=True)
+        frame = ttk.Frame(canvas, padding=24)
+        embedded = canvas.create_window((0, 0), window=frame, anchor='nw')
+        frame.bind('<Configure>', lambda event: canvas.configure(scrollregion=canvas.bbox('all')))
+        canvas.bind('<Configure>', lambda event: canvas.itemconfigure(embedded, width=event.width))
         frame.columnconfigure(1, weight=1)
-        ttk.Label(frame, text='Screenshot → study notes', font=('Segoe UI', 20, 'bold')).grid(row=0, column=0, columnspan=3, sticky='w')
+        ttk.Label(frame, text='Questions → study notes', font=('Segoe UI', 20, 'bold')).grid(row=0, column=0, columnspan=3, sticky='w')
         ttk.Label(frame, text='Capture on demand. Solve through your ChatGPT-signed-in Codex CLI.').grid(row=1, column=0, columnspan=3, sticky='w', pady=(4, 20))
         self.vars = {}
-        fields = [('output', 'Word notes file'), ('codex', 'Codex executable (auto if blank)'),
+        fields = [('output', 'Word file (create or add to)'), ('codex', 'Codex executable (auto if blank)'),
                   ('model', 'Model (Codex default if blank)'), ('capture', 'Capture hotkey'),
                   ('toggle', 'Show/hide activity hotkey'), ('quit', 'Exit hotkey')]
         for row, (key, label) in enumerate(fields, 2):
             ttk.Label(frame, text=label).grid(row=row, column=0, sticky='w', padx=(0, 12), pady=7)
             var = self.vars[key] = tk.StringVar(value=self.settings[key])
             ttk.Entry(frame, textvariable=var).grid(row=row, column=1, sticky='ew', pady=7)
-            if key in ('output', 'codex'):
+            if key == 'output':
+                output_buttons = ttk.Frame(frame)
+                output_buttons.grid(row=row, column=2, padx=(8, 0))
+                ttk.Button(output_buttons, text='Use existing…', command=self.existing_notes).pack(side='left')
+                ttk.Button(output_buttons, text='New…', command=lambda: self.browse('output')).pack(side='left', padx=(4, 0))
+            elif key == 'codex':
                 ttk.Button(frame, text='Browse', command=lambda k=key: self.browse(k)).grid(row=row, column=2, padx=(8, 0))
         self.vars['scope'] = tk.StringVar(value=self.settings['scope'])
         ttk.Label(frame, text='Capture area').grid(row=8, column=0, sticky='w', pady=7)
         ttk.Combobox(frame, values=['active', 'primary'], state='readonly', textvariable=self.vars['scope']).grid(row=8, column=1, sticky='ew')
         ttk.Label(frame, text='active = foreground window; primary = main monitor').grid(row=9, column=1, columnspan=2, sticky='w')
         for row, key, label in [(10, 'silent', 'Start silent (keep activity window hidden)'),
-                                (11, 'cues', 'Show brief notifications when live activity is visible')]:
+                                (11, 'cues', 'Show brief notifications when live activity is visible'),
+                                (12, 'batch_hotkeys', 'Enable Ctrl+2…9 screenshot batch hotkeys')]:
             self.vars[key] = tk.BooleanVar(value=self.settings[key])
             ttk.Checkbutton(frame, text=label, variable=self.vars[key]).grid(row=row, column=0, columnspan=3, sticky='w', pady=7)
-        ttk.Label(frame, text='The corner dot is always on: green ready, amber working, red error.\nSilent mode has no activity window, taskbar entry, or notifications.\nWord notes still open automatically after saving.\nSession images are stored locally; show activity to start a New session.', justify='left').grid(row=12, column=0, columnspan=3, sticky='w', pady=12)
+        ttk.Label(frame, text='The corner dot is always on: green ready, amber working, red error.\nShow Live activity to type a question, attach a diagram, or capture a batch.\nExisting Word notes are preserved; a backup is made before each update.\nScreenshots and typed questions are stored in your local session.', justify='left').grid(row=13, column=0, columnspan=3, sticky='w', pady=12)
         buttons = ttk.Frame(frame)
-        buttons.grid(row=13, column=0, columnspan=3, sticky='ew', pady=8)
+        buttons.grid(row=14, column=0, columnspan=3, sticky='ew', pady=8)
         for label, command in [('Check connection', self.check), ('Retry saved notes', self.retry),
                                ('Save', self.save), ('Save & run', self.start)]:
             ttk.Button(buttons, text=label, command=command).pack(side='left', padx=(0, 8))
         links = ttk.Frame(frame)
-        links.grid(row=14, column=0, columnspan=3, sticky='w')
+        links.grid(row=15, column=0, columnspan=3, sticky='w')
         ttk.Button(links, text='Sign in to Codex', command=self.sign_in).pack(side='left', padx=(0, 8))
         ttk.Button(links, text='Open notes folder', command=self.open_folder).pack(side='left')
         ttk.Button(links, text='Show last status', command=self.show_status).pack(side='left', padx=8)
-        course_frame = ttk.LabelFrame(frame, text='Course references', padding=8)
-        course_frame.grid(row=15, column=0, columnspan=3, sticky='ew', pady=(8, 0))
-        ttk.Label(course_frame, text='In Live activity, paste the folder containing your reference documents.\nSubfolders are searched too. Leave the box blank for screenshot only.\nSelected excerpts are sent to OpenAI with the problem; source files stay unchanged.',
-                  wraplength=640).grid(row=0, column=0, sticky='w')
+        course_frame = ttk.LabelFrame(frame, text='Reference documents (optional)', padding=8)
+        course_frame.grid(row=16, column=0, columnspan=3, sticky='ew', pady=(8, 0))
+        course_frame.columnconfigure(0, weight=1)
+        ttk.Label(course_frame, text='Reference folder (includes subfolders)').grid(row=0, column=0, sticky='w')
+        self.vars['reference_folder'] = tk.StringVar(value=self.settings.get('reference_folder', ''))
+        ttk.Entry(course_frame, textvariable=self.vars['reference_folder']).grid(row=1, column=0, sticky='ew')
+        ttk.Button(course_frame, text='Browse…', command=self.browse_reference_folder).grid(row=1, column=1, padx=(8, 0))
+        ttk.Label(course_frame, text='Additional reference files (one full path per line)').grid(row=2, column=0, columnspan=2, sticky='w', pady=(6, 0))
+        self.reference_files_input = tk.Text(course_frame, height=3, width=55, wrap='none', font=('Segoe UI', 10))
+        self.reference_files_input.grid(row=3, column=0, columnspan=2, sticky='ew')
+        self.reference_files_input.insert('1.0', '\n'.join(self.settings.get('reference_files', [])))
+        file_buttons = ttk.Frame(course_frame)
+        file_buttons.grid(row=4, column=0, columnspan=2, sticky='w', pady=(5, 0))
+        ttk.Button(file_buttons, text='Add files…', command=self.add_reference_files).pack(side='left')
+        ttk.Button(file_buttons, text='Clear files', command=lambda: self.reference_files_input.delete('1.0', 'end')).pack(side='left', padx=5)
+        ttk.Label(course_frame, text='Folder and files can be used together. Save and restart the runner to apply.\nSelected excerpts are sent to OpenAI; original reference files stay unchanged.',
+                  wraplength=640).grid(row=5, column=0, columnspan=2, sticky='w', pady=(5, 0))
         self.status = tk.StringVar(value='Ready to configure. Use the exit hotkey or Task Manager to stop the runner.')
-        ttk.Label(frame, textvariable=self.status, wraplength=665, foreground='#395575').grid(row=16, column=0, columnspan=3, sticky='w', pady=(16, 0))
+        ttk.Label(frame, textvariable=self.status, wraplength=665, foreground='#395575').grid(row=17, column=0, columnspan=3, sticky='w', pady=(16, 0))
         self.events = queue.Queue()
         self.root.update_idletasks()
         width = max(740, frame.winfo_reqwidth() + 12)
-        height = max(700, frame.winfo_reqheight() + 12)
+        height = min(max(700, frame.winfo_reqheight() + 12), self.root.winfo_screenheight() - 100)
         self.root.geometry(f'{width}x{height}')
-        self.root.minsize(width, height)
+        self.root.minsize(min(width, 740), min(height, 650))
         self.root.after(100, self.poll)
 
     def browse(self, key):
@@ -86,20 +116,50 @@ class Setup:
         if result:
             self.vars[key].set(result)
 
+    def existing_notes(self):
+        result = filedialog.askopenfilename(title='Choose existing Word notes to add to', filetypes=[('Word document', '*.docx')])
+        if result:
+            self.vars['output'].set(result)
+
+    def browse_reference_folder(self):
+        result = filedialog.askdirectory(title='Choose reference folder')
+        if result:
+            self.vars['reference_folder'].set(result)
+
+    def add_reference_files(self):
+        selected = filedialog.askopenfilenames(title='Choose reference files', filetypes=[
+            ('Study documents', '*.pdf *.docx *.pptx *.md *.txt *.html *.htm')])
+        if selected:
+            current = self.reference_files_input.get('1.0', 'end').strip()
+            self.reference_files_input.delete('1.0', 'end')
+            self.reference_files_input.insert('1.0', '\n'.join([*current.splitlines(), *selected]))
+
     def values(self):
         values = {k: v.get() for k, v in self.vars.items()}
         if not values['output'].strip() or Path(values['output']).suffix.lower() != '.docx':
             raise ValueError('Choose a Word file ending in .docx.')
         values['output'] = str(Path(values['output']).expanduser().resolve())
+        values['reference_folder'] = reference_folder(values['reference_folder']) or ''
+        values['reference_files'] = reference_file_paths(self.reference_files_input.get('1.0', 'end').splitlines())
+        changed = (values['reference_folder'] != self.settings.get('reference_folder', '') or
+                   values['reference_files'] != self.settings.get('reference_files', []))
+        values['reference_revision'] = uuid.uuid4().hex if changed else self.settings.get('reference_revision', '')
         parsed = [parse_hotkey(values[k]) for k in ('capture', 'toggle', 'quit')]
         if len(set(parsed)) != 3:
             raise ValueError('Choose three distinct hotkeys.')
+        if values['batch_hotkeys']:
+            ctrl_mods = parse_hotkey('Ctrl+2')[0]
+            if any(mods == ctrl_mods and (ord('2') <= code <= ord('9') or 0x62 <= code <= 0x69)
+                   for mods, code in parsed):
+                raise ValueError('Ctrl+2…9 are reserved for batch counts. Choose other action hotkeys or disable batch hotkeys.')
         find_codex(values['codex'])
         return values
 
     def save(self):
         try:
-            save_settings(self.values())
+            values = self.values()
+            save_settings(values)
+            self.settings = values
             self.status.set('Settings saved. Restart a running solver to apply changes.')
             return True
         except Exception as exc:

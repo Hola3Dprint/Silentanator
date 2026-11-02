@@ -31,6 +31,39 @@ def reference_folder(value):
     return str(path.resolve())
 
 
+def reference_file_paths(values):
+    import os
+    result = []
+    for value in values:
+        value = str(value).strip().strip('"').strip()
+        if not value:
+            continue
+        path = Path(os.path.expandvars(value)).expanduser()
+        if not path.is_file() or path.suffix.lower() not in SUPPORTED:
+            raise ValueError('Choose existing reference files: PDF, DOCX, PPTX, Markdown, text, or HTML.')
+        resolved = str(path.resolve())
+        if resolved.casefold() not in {p.casefold() for p in result}:
+            result.append(resolved)
+    return result
+
+
+def build_references(folder, selected_files, cache_root, cancel=None, progress=None):
+    selected_files = reference_file_paths(selected_files)
+    combined = {'course': Path(folder).name if folder else 'Selected reference files', 'files': {}}
+    if folder:
+        combined = build_index(folder, cache_root, cancel, progress)
+    for number, selected in enumerate(selected_files, 1):
+        indexed = build_index(selected, cache_root, cancel, progress)
+        label = f'{Path(selected).name} (selected file {number})'
+        for key, entry in indexed['files'].items():
+            combined['files']['selected:' + selected] = {
+                **entry,
+                'chunks': [{**chunk, 'source': label} for chunk in entry['chunks']],
+                'warnings': [label + ': ' + warning for warning in entry['warnings']],
+            }
+    return combined
+
+
 def tokens(text):
     return [word for word in re.findall(r'[^\W_]+', text.casefold()) if len(word) > 1 and word not in STOP]
 
@@ -85,8 +118,9 @@ def extract(path):
 
 def build_index(course, cache_root, cancel=None, progress=None):
     course = Path(course).expanduser().resolve(strict=True)
-    if not course.is_dir():
+    if not course.is_dir() and not course.is_file():
         raise ValueError('The selected course folder is missing.')
+    root = course if course.is_dir() else course.parent
     cache_root = Path(cache_root)
     cache_root.mkdir(parents=True, exist_ok=True)
     cache = cache_root / (hashlib.sha256(str(course).encode()).hexdigest() + '.json')
@@ -99,7 +133,8 @@ def build_index(course, cache_root, cancel=None, progress=None):
     files, fingerprints = {}, {}
     # Do not follow junctions/symlinks out of the selected course.
     import os
-    for directory, dirs, names in os.walk(course, followlinks=False):
+    walk = os.walk(course, followlinks=False) if course.is_dir() else [(course.parent, [], [course.name])]
+    for directory, dirs, names in walk:
         dirs[:] = sorted(d for d in dirs if d.lower() not in SKIP and
                          not linked(Path(directory) / d))
         for name in sorted(names):
@@ -108,9 +143,9 @@ def build_index(course, cache_root, cancel=None, progress=None):
             path = Path(directory) / name
             if path.suffix.lower() not in SUPPORTED or linked(path):
                 continue
-            if path.suffix.lower() in ('.html', '.htm') and path.with_suffix('.md').exists():
+            if course.is_dir() and path.suffix.lower() in ('.html', '.htm') and path.with_suffix('.md').exists():
                 continue  # StudyFlow exports the same instructions in both formats.
-            relative = path.relative_to(course).as_posix()
+            relative = path.relative_to(root).as_posix()
             stat = path.stat()
             stamp = [stat.st_size, stat.st_mtime_ns]
             if stat.st_size <= 60 * 1024 * 1024:

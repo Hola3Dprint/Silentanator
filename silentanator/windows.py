@@ -13,6 +13,9 @@ user.RegisterHotKey.argtypes = [W.HWND, ctypes.c_int, W.UINT, W.UINT]
 user.UnregisterHotKey.argtypes = [W.HWND, ctypes.c_int]
 user.PeekMessageW.argtypes = [ctypes.POINTER(W.MSG), W.HWND, W.UINT, W.UINT, W.UINT]
 user.GetForegroundWindow.restype = W.HWND
+user.ShowWindow.argtypes = [W.HWND, ctypes.c_int]
+user.IsWindowVisible.argtypes = [W.HWND]
+user.SetWindowPos.argtypes = [W.HWND, W.HWND, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, W.UINT]
 user.GetWindowRect.argtypes = [W.HWND, ctypes.POINTER(W.RECT)]
 
 
@@ -65,10 +68,10 @@ class Hotkeys:
                     raise RuntimeError(f'Hotkey {key} is already in use. Change it in Setup.')
                 self.ids.append(index)
                 bindings[index] = index
-                # Ctrl+0 accepts either zero key, without changing the chosen shortcut.
-                if code == ord('0'):
+                # Numeric shortcuts accept the top row and numpad (Num Lock on).
+                if ord('0') <= code <= ord('9'):
                     alias = index + 100
-                    if user.RegisterHotKey(None, alias, mods, 0x60):
+                    if user.RegisterHotKey(None, alias, mods, 0x60 + code - ord('0')):
                         self.ids.append(alias)
                         bindings[alias] = index
             self.ready.set()
@@ -139,6 +142,18 @@ def no_activate(window):
     get_style.argtypes = [W.HWND, ctypes.c_int]
     set_style.argtypes = [W.HWND, ctypes.c_int, W.LONG]
     set_style(hwnd, -20, get_style(hwnd, -20) | 0x08000000 | 0x80 | 0x20)
+
+
+def show_corner_dot(window):
+    """Reassert the indicator without taking focus, even after owner minimization."""
+    if window.state() != 'normal':
+        window.deiconify()
+    if not window.attributes('-topmost'):
+        window.attributes('-topmost', True)
+    hwnd = user.GetParent(window.winfo_id())
+    if not user.IsWindowVisible(hwnd):
+        user.ShowWindow(hwnd, 4)  # SW_SHOWNOACTIVATE
+    user.SetWindowPos(hwnd, W.HWND(-1), 0, 0, 0, 0, 0x53)  # TOPMOST, no move/size/activation, show
 
 
 def contain_children():

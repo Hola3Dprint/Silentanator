@@ -1,6 +1,6 @@
 # Silentanator
 
-Windows hotkey screenshot-to-study-notes app with a setup app, silent runner, and optional live activity window.
+Windows screenshot and typed-question study-notes app with image attachments, screenshot batches, a setup app, and a silent runner.
 
 **[Download the Windows installer](https://github.com/Hola3Dprint/Silentanator/releases/latest/download/Silentanator-Setup.exe)** · [All releases](https://github.com/Hola3Dprint/Silentanator/releases)
 
@@ -9,6 +9,12 @@ Windows hotkey screenshot-to-study-notes app with a setup app, silent runner, an
 Download **Silentanator-Setup.exe**, open it, and click **Install**. It installs for your Windows account without administrator access, adds Start menu shortcuts and a desktop Setup shortcut, and registers an uninstaller in Windows Settings. Python, the app libraries, and the official Codex CLI are included. Windows 10/11 x64 is required.
 
 In **Silentanator Setup**, choose your notes file, click **Sign in to Codex** to sign in with your own ChatGPT account, then **Check connection** and **Save & run**. No credentials are included in the download. Word is optional for generating notes; use a `.docx` reader to open them.
+
+Use **Use existing…** to select a `.docx` full of notes and add to it, or **New…** to choose a new file.
+Existing text, tables, pictures, headers, footers and other sessions are preserved. Before updating an
+existing document, the app saves a timestamped copy under `%LOCALAPPDATA%/Silentanator/backups`.
+Setup also accepts a reference folder and additional reference files (browse or paste one full path per line).
+Save and restart the runner to apply changed references; a new session starts if the references changed.
 
 Close the runner with Ctrl+Alt+Q before installing an update. Uninstalling removes the app and its shortcuts while keeping your notes, local session screenshots, settings, and Codex sign-in. You can remove that separate personal data yourself if desired. The installer is not code signed, so Windows may display a publisher/reputation warning.
 
@@ -21,10 +27,41 @@ Defaults:
 | Action | Hotkey |
 | --- | --- |
 | Capture foreground window and solve | Ctrl+0 (top row or numpad zero with Num Lock on) |
+| Start a batch of N screenshots | Ctrl+2 through Ctrl+9 (top row or numpad with Num Lock on) |
 | Show/hide live activity | Ctrl+Alt+0 |
 | Stop runner | Ctrl+Alt+Q |
 
 Setup lets you change all hotkeys. Windows reserves the keys while running, so Ctrl+0 will no longer reset browser zoom. Conflicting hotkeys cause a startup error recorded in `%LOCALAPPDATA%/Silentanator/status.json`.
+
+Setup can disable the Ctrl+2…9 batch hotkeys if another app needs them. These count shortcuts are
+reserved while enabled; choose different shortcuts for capture/toggle/exit.
+
+### Typed questions, charts, and diagrams
+
+Show Live activity with Ctrl+Alt+0. Type or paste a question, optionally click **Attach images…** to
+add one or more charts, diagrams, or other images, and click **Solve** (or Ctrl+Enter). Image-only
+attachment requests work too. Text and all attached images are sent as one input. Supported images
+are PNG, JPEG, WebP, BMP and GIF (first frame). Original files stay unchanged. A text-only request
+does not take a screenshot. Submitted typed questions and images are saved in the current session.
+After a successful save the submitted draft and attachment list are cleared.
+
+Solutions request detailed numbered work: knowns and unknowns, assumptions, governing formulas,
+algebraic transformations, unit conversions, substitutions, intermediate arithmetic, answers and checks.
+
+### Screenshot batches
+
+Select the first problem window and press Ctrl+2 for two pictures, Ctrl+3 for three, and so on through
+Ctrl+9. The first picture is captured immediately. Select each next window and press the capture
+hotkey (Ctrl+0 by default), or repeat the same count shortcut. Nothing is sent until the entire batch
+is collected; then all its images are submitted together as one multipart problem or multiple problems.
+Any typed draft already in the question box joins that batch. For 10–99 pictures, enter the count
+in Live activity and click **Start batch**, then select each problem and press the capture hotkey.
+**Cancel batch** discards it from solver context without sending its pictures or changing earlier notes.
+Pending batches, their optional typed question, and their progress survive a restart. Saved cancelled
+image files remain local, like other session screenshots. Larger batches use more Codex allowance.
+
+The corner dot stays on for the entire time the runner is running. A half-second refresh restores
+its visibility and topmost position after hiding or minimization without taking keyboard focus.
 
 The hotkey listener runs on its own thread so the GUI cannot consume its messages. Every capture hotkey appears in the activity log. As a fallback, click **Capture in 3 seconds** and select the problem window before the countdown ends. The activity window minimizes during the countdown and returns after capture.
 
