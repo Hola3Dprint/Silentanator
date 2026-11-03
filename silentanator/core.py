@@ -10,6 +10,7 @@ import uuid
 import time
 import sys
 import hashlib
+from .charts import CHART_SCHEMA, object_schema, validate_chart
 
 DATA = Path(os.environ.get('LOCALAPPDATA', Path.home())) / 'Silentanator'
 CONFIG = DATA / 'settings.json'
@@ -27,12 +28,12 @@ SCHEMA = {
         'type': 'object', 'additionalProperties': False,
         'properties': {
             'heading': {'type': 'string'},
-            'blocks': {'type': 'array', 'items': {
-                'type': 'object', 'additionalProperties': False,
-                'properties': {'kind': {'type': 'string', 'enum': ['text', 'equation']},
-                               'content': {'type': 'string'}},
-                'required': ['kind', 'content'],
-            }},
+            'blocks': {'type': 'array', 'items': {'anyOf': [
+                object_schema({'kind': {'type': 'string', 'enum': ['text', 'equation']},
+                               'content': {'type': 'string'}}),
+                object_schema({'kind': {'type': 'string', 'enum': ['chart']},
+                               'content': {'type': 'string'}, 'chart': CHART_SCHEMA}),
+            ]}},
         }, 'required': ['heading', 'blocks'],
     }}}, 'required': ['sections'],
 }
@@ -62,6 +63,27 @@ Return only the requested JSON. Use ordinary text blocks for explanations (no Ma
 Use equation blocks containing LaTeX math WITHOUT dollar signs, delimiters, environments,
 or custom macros. Put each equation on its own block. Prefer standard fractions, roots,
 integrals, sums, matrices, subscripts, and superscripts. Use short descriptive headings.
+Read charts and plotted points when supplied: identify axis variables, units, tick spacing,
+linear/logarithmic scales, legends, curve identities, and axis direction before reading values.
+Report requested coordinates, intersections, slopes, or areas, explaining any interpolation
+and its assumptions. Image-read values are ESTIMATES unless explicitly printed; use sensible
+precision and state visual ambiguity. Do not fabricate obscured points or uncertainty bounds.
+For sparse/categorical data do not imply a continuous curve without justification.
+When the problem requests plotting, graphing, or chart generation, or a chart is needed to
+explain the solution, include a chart block with a numeric chart specification and a caption
+in content. Use line/scatter/bar series with paired x/y arrays, or function series with a
+safe mathematical expression in x and its finite increasing x_min/x_max range. Function
+expressions use ordinary arithmetic, ** for powers, pi/e, and sin/cos/tan/asin/acos/atan,
+sinh/cosh/tanh/exp/log/log10/sqrt/abs; never LaTeX or Python code. Choose valid domains and
+split known discontinuities into separate series; never connect across poles.
+Include descriptive title, x_label/y_label with units, linear/log scales, x_limits/y_limits
+([] for automatic), invert_y (false normally), series, annotations ([] if none), and notes.
+Each series has label, kind, basis (provided/computed/estimated), and source. Function
+series have basis computed; point series have equal-length x/y arrays. Highlight requested
+points using annotations with x, y, label and basis. In notes state sources, approximation
+and interpolation assumptions. Do not present estimated points as exact measurements.
+Limit charts to what is useful; do not repeat the same chart or invent data. Use plain text
+in chart labels. The app renders the specifications locally and places charts in Word.
 Do not use tools, run commands, inspect files, or change anything. Use the supplied study inputs and references.
 '''
 
@@ -248,8 +270,10 @@ def validate_answer(value):
         if not isinstance(section.get('heading'), str) or not isinstance(section.get('blocks'), list):
             raise ValueError('Malformed notes section.')
         for block in section['blocks']:
-            if block.get('kind') not in ('text', 'equation') or not isinstance(block.get('content'), str):
+            if block.get('kind') not in ('text', 'equation', 'chart') or not isinstance(block.get('content'), str):
                 raise ValueError('Malformed notes block.')
+            if block['kind'] == 'chart':
+                validate_chart(block.get('chart'))
 
 
 def append_notes(path: Path, answer, session_id=None, on_progress=None):
@@ -265,6 +289,15 @@ def append_notes(path: Path, answer, session_id=None, on_progress=None):
     path = path.expanduser().resolve()
     if path.suffix.lower() != '.docx':
         raise ValueError('The notes file must end in .docx.')
+    prepared_charts = {}
+    for section in answer['sections']:
+        for block in section['blocks']:
+            if block['kind'] == 'chart':
+                from .charts import render_chart
+                if on_progress:
+                    on_progress('Drawing chart: ' + block['chart']['title'])
+                key = hashlib.sha256(str(session_id or path).encode()).hexdigest()[:20]
+                prepared_charts[id(block)] = render_chart(block['chart'], DATA / 'charts' / key)
     path.parent.mkdir(parents=True, exist_ok=True)
     # Save/close before reading so manual edits on disk are included in the update.
     closed_word = close_saved_word_document(path, on_progress=on_progress)
@@ -287,6 +320,31 @@ def append_notes(path: Path, answer, session_id=None, on_progress=None):
         for block in section['blocks']:
             if block['kind'] == 'text':
                 generated.append(document.add_paragraph(block['content'])._p)
+            elif block['kind'] == 'chart':
+                asset = prepared_charts[id(block)]
+                chart = block['chart']
+                paragraph = document.add_paragraph()
+                paragraph.paragraph_format.keep_with_next = True
+                width = document.sections[0].page_width - document.sections[0].left_margin - document.sections[0].right_margin
+                picture = paragraph.add_run().add_picture(str(asset.image), width=width)
+                picture._inline.docPr.set('descr', chart['title'] + '; ' + chart['x_label'] + '; ' + chart['y_label'])
+                generated.append(paragraph._p)
+                generated.append(document.add_paragraph(block['content'] or chart['title'])._p)
+                if asset.notes.strip():
+                    generated.append(document.add_paragraph(asset.notes.strip())._p)
+                sources = list(dict.fromkeys(series['source'] for series in chart['series'] if series['source'].strip()))
+                if sources:
+                    generated.append(document.add_paragraph('Chart data: ' + '; '.join(sources))._p)
+                if chart['annotations']:
+                    table = document.add_table(rows=1, cols=3)
+                    for cell, text in zip(table.rows[0].cells, ['Highlighted point', chart['x_label'], chart['y_label']]):
+                        cell.text = text
+                    for point in chart['annotations']:
+                        cells = table.add_row().cells
+                        cells[0].text = point['label'] + (' (estimated)' if point['basis'] == 'estimated' else '')
+                        cells[1].text = format(point['x'], '.6g')
+                        cells[2].text = format(point['y'], '.6g')
+                    generated.append(table._tbl)
             else:
                 try:
                     xml = mathml_to_omml(latex_to_mathml(block['content']))

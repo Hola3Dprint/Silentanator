@@ -6,9 +6,9 @@ if (-not (Test-Path -LiteralPath '.venv/Scripts/python.exe')) {
 }
 & ./.venv/Scripts/python.exe -m pip install -r requirements.lock
 if ($LASTEXITCODE -ne 0) { throw 'Dependency installation failed.' }
-& ./.venv/Scripts/python.exe -m PyInstaller --noconfirm --clean --onedir --windowed --name Silentanator --collect-data latex2mathml run_app.py
+& ./.venv/Scripts/python.exe -m PyInstaller --noconfirm --clean --onedir --windowed --name Silentanator --collect-data latex2mathml --collect-data matplotlib run_app.py
 if ($LASTEXITCODE -ne 0) { throw 'Runner build failed.' }
-& ./.venv/Scripts/python.exe -m PyInstaller --noconfirm --clean --onedir --windowed --name SilentanatorSetup --collect-data latex2mathml setup_app.py
+& ./.venv/Scripts/python.exe -m PyInstaller --noconfirm --clean --onedir --windowed --name SilentanatorSetup --collect-data latex2mathml --collect-data matplotlib setup_app.py
 if ($LASTEXITCODE -ne 0) { throw 'Setup build failed.' }
 Copy-Item -LiteralPath 'dist/Silentanator/Silentanator.exe' -Destination 'dist/SilentanatorSetup/Silentanator.exe' -Force
 # Each executable uses its sibling _internal directory; merge runner dependencies.

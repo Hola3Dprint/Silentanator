@@ -110,6 +110,14 @@ Only a capture hotkey or the countdown button takes a screenshot. Choose the act
 
 ## Notes
 
+### Reading and generating charts
+
+Capture or attach a clear chart image with its axes, ticks, units, and legend visible. Ask for a coordinate, intersection, slope, area, or interpolation in the question box. The solver checks the scale and explains its method; values read from an image are labeled estimates with sensible precision, and unclear or missing data must be called out.
+
+When you ask for a plot or a chart is useful to the solution, the app generates it locally and embeds it in Word. Supported plots are numeric line, scatter, grouped bar, and mathematical function curves, with linear/logarithmic axes, optional axis limits, inverted y axes, and labeled points. Bar plots use a linear x axis. Examples: `Plot y=x^2 from 0 to 4 and label the point (2,4).` Or: `Read the value at x=2.5 from this chart, show the interpolation, and plot the estimated point.`
+
+The notes include captions, sources, approximation notes, and a coordinate table for highlighted points. **Open charts** in the activity window opens `%LOCALAPPDATA%/Silentanator/charts`, containing PNG images, CSV data, and JSON chart specifications. CSV data distinguishes provided, calculated, and estimated values. Function curves are sampled locally from a restricted mathematical expression; model-supplied Python code is never executed. Undefined sampled values are left as gaps. The charts are embedded images, not native editable Word chart objects; their underlying data is exported separately.
+
 ### Course context
 
 In Live activity (Ctrl+Alt+0), paste a path into **Reference folder** and press Enter.

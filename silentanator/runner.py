@@ -174,6 +174,7 @@ class Runner:
         buttons = ttk.Frame(frame)
         buttons.pack(side='bottom', fill='x', pady=(10, 0))
         ttk.Button(buttons, text='Open notes', command=self.open_notes).pack(side='left')
+        ttk.Button(buttons, text='Open charts', command=self.open_charts).pack(side='left', padx=5)
         self.capture_button = ttk.Button(buttons, text='Capture in 3 seconds', command=self.delayed_capture)
         self.capture_button.pack(side='left', padx=8)
         self.new_session_button = ttk.Button(buttons, text='New session', command=self.new_session)
@@ -207,6 +208,8 @@ class Runner:
         for section in answer['sections']:
             self.answer_view.insert('end', section['heading'] + '\n\n')
             for block in section['blocks']:
+                if block['kind'] == 'chart':
+                    self.answer_view.insert('end', 'Chart: ' + block['chart']['title'] + '\n')
                 self.answer_view.insert('end', block['content'] + '\n\n')
         self.answer_view.configure(state='disabled')
         self.panels.select(self.answer_view.master)
@@ -414,6 +417,11 @@ class Runner:
             os.startfile(path)
         except Exception as exc:
             self.activity(str(exc))
+
+    def open_charts(self):
+        directory = DATA / 'charts'
+        directory.mkdir(parents=True, exist_ok=True)
+        os.startfile(directory)
 
     def paint(self):
         colors = {'ready': '#38b778', 'working': '#e4ae3d', 'error': '#e15759'}

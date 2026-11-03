@@ -17,10 +17,12 @@ function Invoke-InstallTest {
 }
 Invoke-InstallTest
 $taskReport = Join-Path $taskQa 'installed-app-check.json'
-$taskApp = Start-Process -FilePath (Join-Path $taskInstall 'Silentanator.exe') -ArgumentList '--check-install','--report',"`"$taskReport`"" -WindowStyle Hidden -Wait -PassThru
+$taskCharts = Join-Path $taskQa 'installed-chart-check'
+$taskApp = Start-Process -FilePath (Join-Path $taskInstall 'Silentanator.exe') -ArgumentList '--check-install','--check-charts',"`"$taskCharts`"",'--report',"`"$taskReport`"" -WindowStyle Hidden -Wait -PassThru
 if ($taskApp.ExitCode -ne 0) { throw 'Installed runtime check failed.' }
 $taskResult = Get-Content -LiteralPath $taskReport -Raw | ConvertFrom-Json
 if (-not $taskResult.ok -or $taskResult.codex -ne (Join-Path $taskInstall 'vendor/codex/codex.exe')) { throw 'Bundled CLI discovery failed.' }
+if (-not $taskResult.chart -or -not (Test-Path -LiteralPath $taskResult.chart)) { throw 'Installed chart generation failed.' }
 $taskPersonal = Join-Path $taskInstall 'my-kept-notes.txt'
 Set-Content -LiteralPath $taskPersonal -Value 'Keep this personal file.'
 Invoke-InstallTest
