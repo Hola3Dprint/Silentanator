@@ -78,7 +78,7 @@ def list_codex_models(configured='', cancel=None, timeout=30):
 
         try:
             send({'id': 0, 'method': 'initialize', 'params': {'clientInfo': {
-                'name': 'silentanator', 'title': 'Silentanator Setup', 'version': '1.6.0'}}})
+                'name': 'silentanator', 'title': 'Silentanator Setup', 'version': '1.7.0'}}})
             response(0)
             send({'method': 'initialized', 'params': {}})
             entries, cursor, request_id, cursors = [], None, 1, set()

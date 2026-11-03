@@ -110,6 +110,14 @@ Only a capture hotkey or the countdown button takes a screenshot. Choose the act
 
 ## Notes
 
+### Finding missing information and methods
+
+Web lookup is enabled automatically through your signed-in Codex account. The solver first uses the question, session context, and selected reference excerpts. When a required fact, formula, material property, table, chart, or method is missing or uncertain, it searches the web, checks that the source matches the problem's conditions and units, and continues the worked solution. You can also ask explicitly: `Find a reliable source for this method and show how to apply it.` Self-contained questions do not require a search.
+
+External facts and methods are cited beside the relevant explanation with the source title, full URL, and page/table/section when available. Chart source notes retain those citations. Course-specific methods take priority; differences from an external source must be explained. Activity reports that web lookup is available and counts actual completed search/browse steps. Web queries may be sent to search providers; the solver is instructed to use targeted technical terms instead of personal details or entire private reference passages.
+
+Unreadable or empty reference material does not stop a solve; extraction gaps remain visible and the solver can look elsewhere. Web search cannot reliably reconstruct an unspecified personal measurement, an illegible problem-specific load, or an unidentified graph. The solver must verify an exact matching source before recovering such data. If search is unavailable or no applicable source is found, the notes explain what is still needed and provide a symbolic or conditional solution where possible. Search availability follows your Codex account, model, and workspace restrictions. No API key is required.
+
 ### Reading and generating charts
 
 Capture or attach a clear chart image with its axes, ticks, units, and legend visible. Ask for a coordinate, intersection, slope, area, or interpolation in the question box. The solver checks the scale and explains its method; values read from an image are labeled estimates with sensible precision, and unclear or missing data must be called out.
@@ -124,7 +132,7 @@ In Live activity (Ctrl+Alt+0), paste a path into **Reference folder** and press 
 Use a course folder or a parent folder containing all your materials; subfolders are searched
 recursively. Paths copied with quotes from Explorer work too. Workspaces and generated output
 folders are excluded. Changing folders starts a new session and preserves earlier notes.
-The folder path is restored after restarting. Leave the box blank to solve from screenshots only.
+The folder path is restored after restarting. Leave the box blank to solve without local course references.
 Invalid paths are reported without changing the current session or starting a capture.
 
 For a course solve, the app first identifies search terms from the problem image using Codex,
@@ -161,4 +169,4 @@ Python 3.12+ on Windows. Run `./build.ps1` to install isolated dependencies and 
 ./.venv/Scripts/python.exe -m unittest discover -s tests -v
 ```
 
-The app runs `codex exec` with image input, structured output, ephemeral sessions, read-only sandbox, and approvals disabled. It ignores user Codex configuration to avoid inheriting custom providers, hooks, or MCP servers, and checks that authentication reports ChatGPT rather than an API key. The prompt requests no tools. This is a Codex-backed solver, so model availability and behavior follow the installed Codex version. See [official non-interactive documentation](https://learn.chatgpt.com/docs/non-interactive-mode).
+The app runs `codex exec` with image input, structured output, ephemeral sessions, read-only sandbox, and approvals disabled. It ignores user Codex configuration to avoid inheriting custom providers, hooks, or MCP servers, and checks that authentication reports ChatGPT rather than an API key. Topic identification disables web search; the final solve enables hosted live web search for missing information and requested research. Shell tools, subagents, apps, plugins, and hooks are disabled. The prompt allows only web research and never authorizes operating the computer or executing model-generated code. This is a Codex-backed solver, so model and search availability follow the installed Codex version and account restrictions. See [official non-interactive documentation](https://learn.chatgpt.com/docs/non-interactive-mode) and [web search documentation](https://learn.chatgpt.com/docs/web-search).

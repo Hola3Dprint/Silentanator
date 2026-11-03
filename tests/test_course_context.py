@@ -83,7 +83,11 @@ class CourseTests(unittest.TestCase):
             final = request.call_args.kwargs['base_prompt']
             self.assertIn('Lecture 3.md', final)
             self.assertIn('dynamic pressure', final)
-            self.assertIn('Do not use tools', final)
+            self.assertIn('Use only the web search/browsing tool', final)
+            self.assertTrue(request.call_args.kwargs['web_search'])
+            topic = request.call_args_list[0].kwargs
+            self.assertFalse(topic.get('web_search', False))
+            self.assertIn('Do not use tools', topic['base_prompt'])
 
 
 if __name__ == '__main__':
