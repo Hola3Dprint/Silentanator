@@ -80,6 +80,7 @@ class ChartTests(unittest.TestCase):
             core.append_notes(path, old)
             answer = {'sections': [{'heading': 'Chart solution', 'blocks': [
                 {'kind': 'chart', 'content': 'Calculated curve and approximate readings.', 'chart': fixture()}]}]}
+            answer['sections'][0]['blocks'][0]['chart']['series'][0]['source'] = 'https://example.test/source'
             core.append_notes(path, answer, session_id='graph-session')
             core.append_notes(path, answer, session_id='graph-session')
             with ZipFile(path) as archive:
@@ -88,9 +89,12 @@ class ChartTests(unittest.TestCase):
                 self.assertEqual(xml.count('Chart solution'), 1)
                 self.assertIn('Highlighted point', xml)
                 self.assertIn('approximate', xml)
+                self.assertNotIn('Chart data:', xml)
+                self.assertNotIn('https://example.test/source', xml)
                 self.assertEqual(xml.count('<pic:pic>'), 1)
                 self.assertTrue(any(name.startswith('word/media/') for name in archive.namelist()))
             self.assertEqual(len(list((Path(directory) / 'charts').rglob('*.png'))), 1)
+            self.assertIn('https://example.test/source', next((Path(directory) / 'charts').rglob('*.json')).read_text())
 
     def test_invalid_chart_does_not_close_word_or_change_notes(self):
         with tempfile.TemporaryDirectory() as directory:

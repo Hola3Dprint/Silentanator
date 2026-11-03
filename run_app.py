@@ -22,10 +22,14 @@ def check_install():
         directory.mkdir(parents=True, exist_ok=True)
         progress = []
         result = solve(None, {**DEFAULTS, 'codex': value['codex']}, new_image_count=0,
-                       question='Search the web for the NIST value of standard gravity, cite its full source URL, and compute the weight of a 2.00 kg mass step by step.',
+                       question='Search the web for an authoritative value of standard gravity and compute the weight of a 2.00 kg mass step by step.',
                        on_progress=progress.append)
         if not any('Web research completed:' in message for message in progress):
             raise RuntimeError('The installation did not perform a verified web lookup.')
+        visible = '\n'.join(section['heading'] + '\n' + '\n'.join(block['content'] for block in section['blocks'])
+                            for section in result['sections'])
+        if 'https://' in visible or 'http://' in visible or '\ue200cite' in visible:
+            raise RuntimeError('Default notes unexpectedly included citations.')
         output = directory / 'web-check-answer.json'
         output.write_text(json.dumps(result), encoding='utf-8')
         value['web_answer'] = str(output)

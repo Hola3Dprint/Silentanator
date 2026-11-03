@@ -114,7 +114,7 @@ Only a capture hotkey or the countdown button takes a screenshot. Choose the act
 
 Web lookup is enabled automatically through your signed-in Codex account. The solver first uses the question, session context, and selected reference excerpts. When a required fact, formula, material property, table, chart, or method is missing or uncertain, it searches the web, checks that the source matches the problem's conditions and units, and continues the worked solution. You can also ask explicitly: `Find a reliable source for this method and show how to apply it.` Self-contained questions do not require a search.
 
-External facts and methods are cited beside the relevant explanation with the source title, full URL, and page/table/section when available. Chart source notes retain those citations. Course-specific methods take priority; differences from an external source must be explained. Activity reports that web lookup is available and counts actual completed search/browse steps. Web queries may be sent to search providers; the solver is instructed to use targeted technical terms instead of personal details or entire private reference passages.
+Worked notes omit citations, source lists, and reference URLs by default. Web research and source verification remain enabled; course-specific methods take priority and differences from an external method must be explained. Chart provenance stays in the separately exported CSV/JSON data. Ask explicitly for citations in the current question if you want them for a particular answer. Activity reports that web lookup is available and counts actual completed search/browse steps. Web queries may be sent to search providers; the solver is instructed to use targeted technical terms instead of personal details or entire private reference passages.
 
 Unreadable or empty reference material does not stop a solve; extraction gaps remain visible and the solver can look elsewhere. Web search cannot reliably reconstruct an unspecified personal measurement, an illegible problem-specific load, or an unidentified graph. The solver must verify an exact matching source before recovering such data. If search is unavailable or no applicable source is found, the notes explain what is still needed and provide a symbolic or conditional solution where possible. Search availability follows your Codex account, model, and workspace restrictions. No API key is required.
 
@@ -124,7 +124,7 @@ Capture or attach a clear chart image with its axes, ticks, units, and legend vi
 
 When you ask for a plot or a chart is useful to the solution, the app generates it locally and embeds it in Word. Supported plots are numeric line, scatter, grouped bar, and mathematical function curves, with linear/logarithmic axes, optional axis limits, inverted y axes, and labeled points. Bar plots use a linear x axis. Examples: `Plot y=x^2 from 0 to 4 and label the point (2,4).` Or: `Read the value at x=2.5 from this chart, show the interpolation, and plot the estimated point.`
 
-The notes include captions, sources, approximation notes, and a coordinate table for highlighted points. **Open charts** in the activity window opens `%LOCALAPPDATA%/Silentanator/charts`, containing PNG images, CSV data, and JSON chart specifications. CSV data distinguishes provided, calculated, and estimated values. Function curves are sampled locally from a restricted mathematical expression; model-supplied Python code is never executed. Undefined sampled values are left as gaps. The charts are embedded images, not native editable Word chart objects; their underlying data is exported separately.
+The notes include captions, approximation notes, and a coordinate table for highlighted points, without automatic source listings. **Open charts** in the activity window opens `%LOCALAPPDATA%/Silentanator/charts`, containing PNG images, CSV data, and JSON chart specifications. CSV data distinguishes provided, calculated, and estimated values and retains source metadata separately. Function curves are sampled locally from a restricted mathematical expression; model-supplied Python code is never executed. Undefined sampled values are left as gaps. The charts are embedded images, not native editable Word chart objects; their underlying data is exported separately.
 
 ### Course context
 
@@ -138,8 +138,9 @@ Invalid paths are reported without changing the current session or starting a ca
 For a course solve, the app first identifies search terms from the problem image using Codex,
 then searches a local text index of that course's PDFs, DOCX, PPTX, Markdown, text and HTML files.
 It sends up to 18 relevant excerpts (about 36,000 characters) with the screenshots to Codex.
-The solution is instructed to follow course methods and notation and cite the filenames and
-PDF pages or slide numbers actually used. It labels a general method when the excerpts do not
+The solution is instructed to follow course methods and notation. Source filenames and page/slide
+labels identify the excerpts internally; citations are omitted from the notes unless the current
+question explicitly requests them. It labels a general method when the excerpts do not
 support a course-specific approach. This retrieval step adds a second Codex request per capture.
 
 The index lives in `%LOCALAPPDATA%/Silentanator/course-cache` and refreshes when source files
@@ -147,7 +148,7 @@ change. Course files are never modified. Duplicate files are indexed once. Scann
 pages, encrypted/corrupt files, and files over 60 MB may be unavailable; extraction warnings
 appear in activity. OCR is not included. Course images/diagrams are not extracted from PDFs.
 Selected excerpts are sent to OpenAI through your signed-in Codex account; the full course
-folder is not uploaded. Verify the cited method and answer against your original materials.
+folder is not uploaded. Verify the method and answer against your original materials.
 
 The default file is `Documents/Notes.docx` with the visible title **Notes**. Captures in the same session share all prior images and the latest notes. The solver returns complete updated session notes: it continues related problems, corrects earlier assumptions when more information appears, and adds sections for new problems. That session's Word content control is replaced in place, preserving earlier sessions and other document content. Equations remain native editable Word equations (OMML), converted from LaTeX.
 

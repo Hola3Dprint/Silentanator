@@ -14,7 +14,7 @@ from silentanator import core
 
 
 ANSWER = {'sections': [{'heading': 'Weight', 'blocks': [
-    {'kind': 'text', 'content': 'Standard gravity: NIST, https://physics.nist.gov/.'},
+    {'kind': 'text', 'content': 'Standard gravity is 9.80665 metres per second squared.'},
     {'kind': 'equation', 'content': 'W=mg'},
 ]}]}
 
@@ -60,7 +60,7 @@ class WebSearchTests(unittest.TestCase):
         self.assertNotIn('CODEX_API_KEY', received['env'])
         self.assertTrue(any('1 search/browse step(s)' in message for message in progress))
         self.assertNotIn('Private source content', '\n'.join(progress))
-        self.assertIn('source title, full https:// URL', received['stdin'].getvalue().decode())
+        self.assertIn('do not add source attributions', received['stdin'].getvalue().decode())
 
     def test_topic_request_disables_web_search_and_does_not_claim_research(self):
         received, progress = self.request(False)

@@ -17,7 +17,7 @@ def report(message):
     print(message, flush=True)
 
 question = ('A 2.00 kg object is at standard gravity. The value of standard gravity is not supplied. '
-            'Find its weight step by step, with an authoritative source for the missing constant. '
+            'Look up an authoritative value for the missing constant and find its weight step by step. '
             'Also plot weight versus mass from 0 to 3 kg and highlight the 2 kg point.')
 answer = core.solve(None, settings, question=question, new_image_count=0, on_progress=report)
 (directory / 'data-answer.json').write_text(json.dumps(answer, indent=2), encoding='utf-8')
@@ -31,12 +31,12 @@ assert charts and any(abs(point['x']-2)<.001 and abs(point['y']-19.6133)<.1
 with patch.object(core, 'DATA', directory / 'app-data'):
     core.append_notes(directory / 'Research notes.docx', answer, session_id='web-check', on_progress=report)
 with ZipFile(directory / 'Research notes.docx') as archive:
-    assert 'https://' in archive.read('word/document.xml').decode()
+    assert 'https://' not in archive.read('word/document.xml').decode(), 'Default notes should omit citations'
     assert any(name.startswith('word/media/') for name in archive.namelist())
 
 progress.clear()
 method = core.solve(None, settings, question=(
-    'Use a university source to find the bisection method and cite its source URL. Apply it to '
+    'Use a university source to find the bisection method. Apply it to '
     'cos(x)-x=0 on [0,1], showing actual iterations until bracket width <0.01. '
     'In a separate part, a rectangle has length 5 m but its width is omitted and no identifying '
     'source is provided. Explain whether internet research can uniquely determine that width '
@@ -45,7 +45,7 @@ method = core.solve(None, settings, question=(
 (directory / 'method-answer.json').write_text(json.dumps(method, indent=2), encoding='utf-8')
 text = json.dumps(method)
 assert any('Web research completed:' in message for message in progress), 'No method research was observed'
-assert 'https://' in text and ('0.73' in text or '0.74' in text), 'Missing source or incorrect bisection root'
+assert 'https://' not in text and ('0.73' in text or '0.74' in text), 'Unexpected citation or incorrect bisection root'
 with patch.object(core, 'DATA', directory / 'app-data'):
     core.append_notes(directory / 'Method notes.docx', method, on_progress=report)
-print('Live external constant lookup, cited method, generated plot, Word output, and unresolved-input checks completed.', flush=True)
+print('Live lookup, method research, generated plot, citation-free Word output, and unresolved-input checks completed.', flush=True)

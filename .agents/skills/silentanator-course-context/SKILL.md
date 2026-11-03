@@ -1,6 +1,6 @@
 ---
 name: silentanator-course-context
-description: Maintain and validate course-document retrieval in Silentanator, including per-session selection, local indexing, cited solving, and packaged Windows verification. Use for this repository's course-context features rather than general document questions.
+description: Maintain and validate course-document retrieval in Silentanator, including per-session selection, local indexing, research-assisted solving, and packaged Windows verification. Use for this repository's course-context features rather than general document questions.
 ---
 
 # Silentanator course context
@@ -11,8 +11,9 @@ description: Maintain and validate course-document retrieval in Silentanator, in
 - Store selection in `StudySession` state, not a global course setting. Changing course starts a fresh session while preserving earlier notes. Restore selection across restarts. Existing sessions without a course remain usable without local references; web lookup is available when needed.
 - Setup may supply a folder and additional explicit files. Its reference revision applies changed defaults once on the next runner launch; subsequent restarts preserve session-specific choices. Setup displays current session references unless newer choices are waiting to apply. Test this synchronization when changing reference settings.
 - Never alter source documents. Exclude generated Workspaces/output folders, avoid following reparse points, deduplicate content, and refresh changed/deleted sources. Keep filenames and PDF page/slide labels attached to every excerpt.
-- State extraction gaps, especially image-only PDF pages, diagrams, encrypted files, and size limits. Do not equate extracted text with full document coverage. Cite only references actually used and distinguish general methods when retrieval is insufficient.
-- Missing facts, formulas, property tables, charts, or methods should trigger targeted web research after using the supplied inputs and selected excerpts. Prefer applicable primary sources and cite title, full URL, and location beside sourced information, including chart provenance. Do not replace missing problem-specific data with generic examples. Unreadable/empty references should report gaps and allow web-assisted solving. If research cannot recover reliable applicable information, state the remaining input needed and give a conditional/symbolic result where possible. Count real web-search events rather than claiming a lookup occurred from the prompt alone.
+- State extraction gaps, especially image-only PDF pages, diagrams, encrypted files, and size limits. Do not equate extracted text with full document coverage. Distinguish general methods when retrieval is insufficient. Notes omit citations, reference filenames, URLs, and source lists unless the current question explicitly asks for them. Keep useful explanations/calculations while removing old citation-only material when regenerating a session. Preserve source labels internally and chart provenance in separately exported CSV/JSON metadata; do not add automatic chart-source paragraphs to Word.
+- `note_format.py` cleans final answers unless the current typed question explicitly requests citations. It removes native citation markup, reference links and source-only material while preserving numeric facts, equations, and chart source metadata. Keep the local topic query unmodified; do not depend on the model prompt alone to suppress citations.
+- Missing facts, formulas, property tables, charts, or methods should trigger targeted web research after using the supplied inputs and selected excerpts. Prefer applicable primary sources and check their conditions/units even though citations are omitted by default. Do not replace missing problem-specific data with generic examples. Unreadable/empty references should report gaps and allow web-assisted solving. If research cannot recover reliable applicable information, state the remaining input needed and give a conditional/symbolic result where possible. Count real web-search events rather than claiming a lookup occurred from the prompt alone.
 - Keep local course text and cache out of Git, release payloads, logs, and test fixtures. UI copy must explain that selected excerpts are sent to OpenAI.
 
 ## Validation
@@ -25,10 +26,10 @@ Run commands from the repository root with its virtual environment:
 git diff --check
 ```
 
-Tests should cover source refresh/deletion, course isolation, citations/warnings, session restoration,
+Tests should cover source refresh/deletion, course isolation, citation visibility/warnings, session restoration,
 and the query-retrieval-final-solve boundary. For extraction changes, also exercise a real supported
 document locally. Use a synthetic problem image for an authorized live solve, check the numerical
-result and source citation, and generate native editable Word equations. Keep this evidence local.
+result, actual research events and default citation omission, and generate native editable Word equations. Keep this evidence local.
 
 Inspect the native UI after changing layout. Tk pack order can let an expanding notes pane hide
 later controls: reserve bottom controls before allocating the remaining space to the notes.

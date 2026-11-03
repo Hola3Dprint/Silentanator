@@ -253,7 +253,7 @@ def render_chart(chart, directory):
                     frameon=False, borderaxespad=0)
         estimated = any(s['basis'] == 'estimated' for s in chart['series']) or any(p['basis'] == 'estimated' for p in chart['annotations'])
         if estimated:
-            figure.text(0.14, 0.025, 'Estimated readings from image; see notes for source and precision.', fontsize=8)
+            figure.text(0.14, 0.025, 'Estimated readings from image; see notes for precision.', fontsize=8)
         if any(y is None for _, _, ys in samples for y in ys):
             asset.notes += '\nThe function is undefined at some sampled values; those points are omitted and the line is broken.'
         figure.savefig(asset.image, format='png', dpi=240, bbox_inches='tight', facecolor='white')

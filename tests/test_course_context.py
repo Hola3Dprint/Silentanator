@@ -46,7 +46,7 @@ class CourseTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 reference_folder(str(Path(directory) / 'missing'))
 
-    def test_source_citations_and_unreadable_file_warning(self):
+    def test_source_labels_and_unreadable_file_warning(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             course = root / 'Course'
@@ -59,6 +59,8 @@ class CourseTests(unittest.TestCase):
             self.assertIn('lecture.md', prompt)
             self.assertIn('broken.pdf', prompt)
             self.assertIn('UNTRUSTED', prompt)
+            self.assertIn('Do not add citations', prompt)
+            self.assertNotIn('Cite each reference actually used', prompt)
             self.assertEqual(excerpts[0]['location'], 'text')
 
     def test_session_course_survives_restart_and_fresh_session(self):
@@ -71,7 +73,7 @@ class CourseTests(unittest.TestCase):
             self.assertNotEqual(fresh.id, session.id)
             self.assertNotEqual(fresh.course, session.course)
 
-    def test_solver_searches_course_then_supplies_cited_excerpts(self):
+    def test_solver_searches_course_then_supplies_labelled_excerpts(self):
         with tempfile.TemporaryDirectory() as directory, patch.object(core, 'DATA', Path(directory)):
             course = Path(directory) / 'Aero'
             course.mkdir()
