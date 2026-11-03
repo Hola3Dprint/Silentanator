@@ -65,7 +65,7 @@ class WebSearchTests(unittest.TestCase):
     def test_topic_request_disables_web_search_and_does_not_claim_research(self):
         received, progress = self.request(False)
         self.assertIn('web_search="disabled"', received['args'])
-        self.assertNotIn('--json', received['args'])
+        self.assertIn('--json', received['args'])
         self.assertFalse(any('Web research completed' in message for message in progress))
 
     def test_no_readable_references_does_not_block_web_solving(self):

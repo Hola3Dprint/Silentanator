@@ -95,20 +95,17 @@ internal static class Program
                 throw new InvalidOperationException("The update destination is not a Silentanator installation.");
             ValidatePayload();
             Record("waiting", "Waiting for the current request and open app windows to finish.");
-            var timer = Stopwatch.StartNew();
             if (int.TryParse(Option(args, "--wait-pid"), out int parentId))
             {
                 try
                 {
                     using var parent = Process.GetProcessById(parentId);
-                    if (!parent.WaitForExit(360000)) throw new TimeoutException("The app did not finish within six minutes. The existing installation was not changed.");
+                    parent.WaitForExit();
                 }
                 catch (ArgumentException) { /* Caller already exited. */ }
             }
             while (AppRunning(directory, "Silentanator.exe") || AppRunning(directory, "SilentanatorSetup.exe"))
             {
-                if (timer.Elapsed.TotalMinutes > 6)
-                    throw new TimeoutException("An app window is still open. The existing installation was not changed.");
                 Thread.Sleep(250);
             }
             Record("installing", "Installing verified update.");

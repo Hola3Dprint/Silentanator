@@ -22,8 +22,9 @@ with patch.object(runner, 'load_settings', return_value=settings), patch.object(
             assert app.root.state() == 'normal', 'Activity window must remain visible'
             app.question_input.delete('1.0', 'end')
             app.clear_attachments()
+            app.root.update_idletasks()
             for control in (app.capture_button, app.new_session_button, app.reference_entry,
-                            app.solve_button, app.attach_button, app.batch_button, app.question_input):
+                            app.solve_button, app.retry_button, app.attach_button, app.batch_button, app.question_input):
                 assert control.winfo_ismapped(), 'Session controls must remain visible'
                 assert control.winfo_rooty() + control.winfo_height() <= app.root.winfo_rooty() + app.root.winfo_height(), 'Session controls must fit inside the window'
             assert not app.notice.winfo_exists(), 'Startup notice lasted more than a second'

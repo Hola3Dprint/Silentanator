@@ -34,6 +34,7 @@ question drafts, attachments, pending screenshot batches and unsaved Setup field
 The separate installer waits for the app to exit, applies the existing upgrade/rollback procedure,
 then restarts the runner or Setup as appropriate. Notes, saved settings, references and Codex sign-in
 are retained. Unsaved form edits are restored without being saved as configuration automatically.
+The installer waits for an active solve without a fixed wait limit; long research is not cut short by an update.
 Download/verification errors leave the current app running. The last installation result is stored in
 `%LOCALAPPDATA%/Silentanator/updates/last-update.json`.
 
@@ -84,6 +85,14 @@ iteration, residual/error and convergence test. Given course methods, starting v
 priority; otherwise the solver labels its choices as assumptions. Direct questions use direct methods.
 No iteration setting or checkbox is required.
 
+### Long solves and retrying
+
+Solving has **no automatic time limit**. Codex can keep working on a long calculation or web lookup until it finishes or reports an error. Ctrl+Alt+Q (or your configured exit shortcut), **Stop and exit**, and Task Manager can still stop the runner and its solver processes. Provider usage limits and connection failures can still end a request.
+
+The activity log reports request acceptance, web lookup activity, completed search/browse steps, and response activity from actual Codex events, with an elapsed-time update every 15 seconds. It does not display private queries or model reasoning. Updates do not take keyboard focus.
+
+If a request fails, click **Retry last solve** in Live activity to resend its saved inputs without capturing another screenshot or adding duplicate images/questions. New requests preserve their exact current-image group, typed question, and earlier context across restarts. This also works for batches and attachments, using their saved copies even if the original attachment is moved. An unsent edited draft stays available; a draft that still matches the retried input is cleared after a successful save. Sessions from older versions can recover their latest capture or text input, though their original batch grouping was not recorded.
+
 ### Screenshot batches
 
 Press Ctrl+2 to enter two-picture mode, Ctrl+3 for three, and so on through Ctrl+9. Choosing a count
@@ -104,7 +113,7 @@ The hotkey listener runs on its own thread so the GUI cannot consume its message
 
 Run mode starts silent by default: no activity window, taskbar entry, tray icon, or notifications. A small dot in the bottom left corner stays visible throughout startup, capture, solving, saving, and error states: green ready, amber working, red error. It is always on regardless of notification settings. Ctrl+Alt+0 shows or hides the live activity window without hiding the dot. Setup can change the startup mode and notification preference. Its process name is `Silentanator.exe` in Task Manager. Use Ctrl+Alt+Q or Task Manager to stop it; when activity is visible, closing that window or clicking **Stop and exit** also stops the runner. There is no automatic startup or restart after termination.
 
-The optional live activity window shows a screenshot preview, timestamped log, progress indicator, session notes, and errors. It reports capture, sign-in, request submission, waiting, equation conversion, saving, and opening the document. While waiting for Codex it updates the elapsed time every five seconds; this is request status, not a stream of model reasoning. Silent mode does not prevent the requested Word document from opening after a successful save.
+The optional live activity window shows a screenshot preview, timestamped log, progress indicator, session notes, and errors. It reports capture, sign-in, request submission, observed Codex/web activity, equation conversion, saving, and opening the document. While waiting for Codex it updates the elapsed time every 15 seconds without imposing a solve deadline; this is request status, not a stream of model reasoning. Silent mode does not prevent the requested Word document from opening after a successful save.
 
 Only a capture hotkey or the countdown button takes a screenshot. Choose the active window or primary monitor; avoid capturing unrelated private content. Select the problem window before pressing the hotkey. Capture is blocked while a request is in progress. The activity window and notification are hidden during capture; activity returns only if silent mode is off. The corner dot remains visible even during capture. Session screenshots are retained under `%LOCALAPPDATA%/Silentanator/sessions` and sent to OpenAI with each new image so the solver can use the full session context. Codex/provider retention policies still apply. No images are embedded in the notes.
 

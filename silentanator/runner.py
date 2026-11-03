@@ -143,6 +143,8 @@ class Runner:
         ttk.Label(question_buttons, textvariable=self.attachment_info).pack(side='left')
         self.solve_button = ttk.Button(question_buttons, text='Solve (Ctrl+Enter)', command=self.submit_question)
         self.solve_button.pack(side='right')
+        self.retry_button = ttk.Button(question_buttons, text='Retry last solve', command=self.retry_last_request)
+        self.retry_button.pack(side='right', padx=5)
         batch_row = ttk.Frame(frame)
         batch_row.pack(fill='x', pady=(0, 6))
         ttk.Label(batch_row, text='Screenshot batch:').pack(side='left')
@@ -282,6 +284,28 @@ class Runner:
         finally:
             self.syncing_question = False
 
+    def retry_last_request(self):
+        if self.busy or self.update_pending or self.session.batch_target:
+            return
+        if not self.apply_reference_folder():
+            return
+        try:
+            request = self.session.retry_input()
+        except ValueError as exc:
+            self.activity(str(exc))
+            return
+        prior = self.session.last_request or {}
+        clear_draft = (self.question_input.get('1.0', 'end').strip() == (request['question'] or '')
+                       and self.attached_images == prior.get('attachments', []))
+        self.busy = True
+        self.state = 'working'
+        self.progress.start(15)
+        self.set_input_state('disabled')
+        self.paint()
+        self.activity('Retrying the saved request; no new screenshot is taken. There is no automatic solve time limit.')
+        self.panels.select(self.log.master)
+        threading.Thread(target=self.work, kwargs={'retry': True, 'clear_retry_draft': clear_draft}, daemon=True).start()
+
     def toggle_question_box(self):
         if self.busy or self.update_pending:
             return
@@ -332,6 +356,8 @@ class Runner:
                             self.batch_button, self.batch_spin):
                 control.configure(state='disabled')
         self.cancel_batch_button.configure(state='normal' if state == 'normal' and self.session.batch_target else 'disabled')
+        can_retry = bool(self.session.last_request or self.session.images or self.session.questions)
+        self.retry_button.configure(state='normal' if state == 'normal' and not self.session.batch_target and can_retry else 'disabled')
         if self.composer_input is not None:
             self.composer_input.configure(state='normal' if state == 'normal' and not self.session.batch_target else 'disabled')
 
@@ -392,6 +418,7 @@ class Runner:
         self.answer_view.configure(state='disabled')
         self.preview.configure(image='', text='The most recent screenshot will appear here.')
         self.activity('New session started. Earlier notes remain in the document.')
+        self.set_input_state('normal')
         return True
 
     def apply_reference_folder(self, event=None):
@@ -519,11 +546,18 @@ class Runner:
             if not self.silent:
                 self.root.deiconify()
 
-    def work(self, image=None, question=None, attachments=None):
+    def work(self, image=None, question=None, attachments=None, retry=False, clear_retry_draft=False):
         try:
             record_status('working')
             new_image_count = 0
-            if question or attachments:
+            if retry:
+                if self.session.batch_target:
+                    raise ValueError('Finish or cancel the screenshot batch before retrying a request.')
+                request = self.session.retry_input()
+                path, history, question, questions, new_image_count = (
+                    request['image_path'], request['history'], request['question'],
+                    request['question_history'], request['new_image_count'])
+            elif question or attachments:
                 if question:
                     self.session.add_question(question)
                 path = None
@@ -560,6 +594,8 @@ class Runner:
                 new_image_count = 1
                 history = self.session.images[:-1]
                 questions = self.session.questions
+            if not retry or self.session.last_request is None:
+                self.session.remember_request(path, history, question, questions, new_image_count, attachments)
             self.events.put(('session', None))
             self.events.put(('progress', f'Building on {len(self.session.images)} image(s) in this session…'))
             answer = solve(path, self.settings, self.cancel,
@@ -575,7 +611,7 @@ class Runner:
             append_notes(Path(self.settings['output']), answer, session_id=self.session.id,
                          on_progress=lambda detail: self.events.put(('progress', detail)))
             clear_session_pending(self.session.id)
-            if question or attachments:
+            if (not retry and (question or attachments)) or (retry and clear_retry_draft):
                 self.events.put(('input_sent', None))
             self.events.put(('ready', 'Notes saved'))
         except Exception as exc:
